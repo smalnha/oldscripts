@@ -1,0 +1,748 @@
+#!/bin/bash
+#    dvd-mainmenu
+#    Copyright 2003 Scott Dylewski  <scott at dylewski.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+version='0.7.1'
+
+changes () 
+{
+echo 'Changes:
+0.7.1	Automatically creates output directory if it does not exist.
+	Added option -nomenu if you do not want to create a menu
+	AC3 is default audio type now.  Pass -mp2 if you want to 
+	force mp2 audio.
+0.7.0	Added option -iso option to create the iso image
+0.6.2	Removed -c and -R 2 options from mpeg2enc because some versions
+	do not have those switches.
+	Works with toolame 0.2m now.
+	Got rid of calls to NetPBM functions, so it is no longer required...
+0.6.0	Added AC3 audio option (requires ffmpeg > 0.4.8).
+	Mplexed files are now correctly labeled with the .vob extension.
+        Better font searching (thanks Jim Crumley)
+0.5.4	No changes.
+0.5.2	Fixed audio bug when no audio was used. (re-mplex error)
+	Added -c continuous play option (<post> jumps to next title).
+	Added -D do not run dvdauthor option.
+	Added -W do not create a 50% white background under menu text.
+	dvdauthor xml structure changed slightly
+	DVD Title (-n) is now optional.
+	Added man page.
+	Checks for nice fonts.
+0.5.0	Changed name to "dvd-menu"
+	Only requires lame or oggdec if you are using that file format.
+	Fixed some audio bugs (sampling) so it should work better.
+	Will automatically delete AUDIO_TS and VIDEO_TS directories
+	in your output directory if they already exist.
+0.4.6	Fixed bug when checking for toolame (thanks Scott Merrill)
+	Removed -t option from toolame for better compatibility with old versions.	
+0.4.2	Changed location of main title slightly lower.
+	Fixed one hardcoded 720x480 image so PAL option should work better.
+	Added -depth 8 to ImageMagick calls to fix ppmtoy4m errors. 
+	Upgraded main menu background when no background is passed.
+0.4	Fixed bug when no background file was passed. Works now.
+	Ogg audio format supported now.
+	Uses toolame for mp2 audio encoding when available.
+	-p (PAL format option) added.  Not tested, but should work.
+	Menu button white background is now 50% transparent.
+0.3	Added section to check for required programs
+	If no background passed, a black one will be used.
+0.2	Initial release'
+}
+
+help ()
+{
+echo "dvd-menu is part of dvd-slideshow $version"
+echo "`basename $0`"
+echo "http://freshmeat.net/dvdslideshow/"
+echo 'Copyright 2003 Scott Dylewski <scott at dylewski.com>
+ 
+Usage: 
+  dvd-menu -t <titleset1> ... -t <titlesetN>
+  -f <xmlfile1> ... -f <xmlfileN> -o output_directory
+  [-b <background jpeg>] [ -a <menu audio file> ] [-p]
+  [-c] [-D] [-W] [-mp2] [-iso] [-nomenu]
+
+Description: 
+	Creates a simple vmgm menu with buttons that
+	link to the mpeg files in the specified 
+	dvdauthor-compatible xml files. 
+	
+Options: 
+ -t <titleset1> -t <titleset2> ... -t <titlesetN>
+	Name of each title.  Each string will be used for 
+	the button menu corresponding to each xmlfile.
+
+ -f <xmlfile1> <xmlfile2> ...
+	Name of each titleset xml file.  You can use
+	dvd_slideshow to generate one for each slideshow
+	or you can create your own for a simple mpeg2
+	file.
+ 		
+ -o <output directory>
+	Directory where the output dvd file system resides
+
+ -b <background jpeg>
+	Image to put in the background of the menu.
+
+ -a <audiofile>
+	Audio file to use in the background of the
+	menu.  The full audio file will keep looping.
+	Supports mp3, ogg, or wav.
+
+ -mp2
+        Use MP2 audio by default.  AC3 seems to be more stable
+	in hardware players, but requires ffmpeg.
+
+ -n "dvd_title"
+        This string will be placed on the top of the
+        menu page.
+
+ -p
+        Use PAL format instead of NTSC (untested initial support)
+
+ -c
+        Use continuous method.  Each video plays one after another.
+
+ -W
+        Do not generate 50% white background behind menu text.
+
+ -D
+        Do not call dvdauthor at the end.  Useful when you want
+	to edit your own xml file and pass it to dvdauthor by hand.
+
+ -iso
+        Create iso image with mkisofs when finished.
+
+ -nomenu
+        Do not create a menu.  Useful for just finishing the 
+	dvdauthor xml file from one video that you want to just
+	start playing when the user puts it into a dvd player.
+
+ -h or -help 
+   Prints this help. 
+
+Requires:
+	dvdauthor 0.6.9
+	sox
+	mjpegtools  (mp2enc, mpeg2enc, ppmtoy4m)
+	ImageMagick (convert)
+ '
+}
+
+if [ $# -lt 1 ]; then
+	help
+	exit 1
+fi
+
+############################################################3
+## setup initial variables:
+debug=0  # 1 or 0
+pal=0
+fill_audio=0
+tmpdir="."
+continuous=0
+no_dvdauthor=0
+no_white=0
+ac3=1
+iso=0
+no_menu=0
+
+# define some possible fonts:
+font1='n019004l.pfb' # helvetica bold URW fonts
+font2='helb____.ttf' # helvetica bold truetype
+font_dir="/usr/share/fonts/"
+. $MY_DVDMENU_SRC
+
+#Find the fonts
+font1=`find $font_dir -name $font1`
+font2=`find $font_dir -name $font2`
+
+
+if [ "$pal" -eq 1 ] ; then
+        framerate='25'
+        width='720'
+        height='576'
+        resolution='720x576'
+        frames_per_sec=2500  # in 1/100ths of a second
+else
+        framerate='29.97'
+        width='720'
+        height='480'
+        resolution='720x480'
+        frames_per_sec=2997  # in 1/100ths of a second
+fi
+
+## other cool colors:  cadetblue cornflowerblue midnightblue
+bg_color='steelblue'
+menu_height=28
+menu_width=288
+text_size=$(( 3 * $menu_height / 4 ))
+text_loc=$(( $menu_height/2 + $text_size/2 ))
+menu_location_x=360
+menu_location_y=175  # distance of the top of the first menu item to the top of the screen
+title_font_size=40
+title_location_x=80
+title_location_y=50
+frames=30 	# number of frames in the menu mpg file. 
+		# I guess this only really needs to be 1 frame
+		# but 30 is easier to debug so we can play it.
+
+. $MY_DVDMENU_SRC
+
+# end of default  variables
+#########################################################
+
+if [ ! -d "$tmpdir" ] ; then
+	## create directory
+	mkdir "$tmpdir"
+fi
+
+let n=0
+let m=0
+for arg
+do
+	case "$arg" in
+	-t) shift ; title[$n]="${1}"; let n=$n+1; shift ;;  # each title
+	-f) shift ; xmlfile[$m]="${1}"; let m=$m+1; shift ;;  # each titleset
+	-o) shift; outdir="$1"; shift ;;  # dvd directory
+	-b) shift; bgfile="$1"; shift ;;  # background jpeg
+	-n) shift; dvd_title="$1"; shift ;; # name of DVD disk
+	-p) shift; pal=1 ;;
+	-c) shift; continuous=1 ;;
+	-D) shift; no_dvdauthor=1 ;;
+	-W) shift; no_white=1 ;;
+	-nomenu) shift; no_menu=1 ;;
+	-a) shift; audiofile="$1"; shift;; # audio file playing during menu
+        -ac3) shift; ac3=1 ;;  # use ac3 audio
+        -mp2) shift; ac3=0 ;;  # use mp2 audio
+        -iso) shift; iso=1 ;;  # make iso image when finished
+	-h) help ; exit 0 ; shift ;;
+	-?) help ; exit 0 ; shift ;;
+	-help) help ; exit 0 ; shift ;;
+	esac
+done
+
+#dnlam: for submenus to get back to top menu, let the last menu item be "Main Menu"
+# title[$n]="Main Menu"
+
+## check_rm checks to see if the file exists before it's deleted:
+check_rm ()
+{
+	if [ -f "${1}" ] ; then
+		rm "${1}"
+	fi
+}
+
+cleanup ()
+{
+	## clean up temporary files
+	echo "[dvd-menu] cleanup..."
+	check_rm "$tmpdir/slideshow_background.ppm"
+#	check_rm "$tmpdir/silence.mp2"
+	check_rm "$tmpdir/button_background.png"
+	check_rm "$tmpdir/button_text.png"
+	check_rm "$tmpdir/button_mask.png"
+	check_rm "$tmpdir/menu.ppm"
+	check_rm "$tmpdir/menu.mpg"
+	check_rm "$tmpdir/menu.spumux"
+	check_rm "$tmpdir/menu_mask.png"
+	check_rm "$tmpdir/menu_t.mpg"
+	check_rm "$tmpdir/menu_t.vob"
+	check_rm "$tmpdir/menu_audio.wav"
+	check_rm "$tmpdir/audio.mp2"
+	check_rm "$tmpdir/audio.wav"
+	check_rm "$tmpdir/audio.ac3"
+	check_rm "$tmpdir/dvd_title.png"
+	check_rm "$tmpdir/titles_vmgm.xml"
+        k=0
+        dk=0
+        for file in "${title[@]}"; do
+                [ $k -lt 10 ] && dk="0$k" || dk=$k
+#              	echo "k=$k  dk=$dk"
+                check_rm "$tmpdir"/title_"$dk"_mask.png
+                check_rm "$tmpdir"/title_"$k"_mask.png
+                check_rm "$tmpdir/title_$dk.ppm"
+                check_rm "$tmpdir/title_$k.ppm"
+                let k=$k+1
+        done
+	echo "[dvd-menu] done!"
+}
+
+forcequit () ## function gets run when we have some sort of forcequit...
+{
+	## clean up temporary files
+	cleanup
+	exit
+}
+
+trap 'forcequit' INT
+trap 'forcequit' KILL
+trap 'forcequit' TERM
+
+## check for the necessary programs:
+checkforprog ()
+{
+        it=`which $1`
+        if [ -z "$it" ] ; then
+                echo "[dvd-menu] ERROR:  $1 not found! "
+                echo "[dvd-menu] Check the dependencies and make sure everything is installed."
+                exit 1
+        fi
+}
+
+hms ()
+{
+        ## pass a number in hundreths of seconds and get back a
+        ## time code of the form HR:MM:SS:HU
+        hours=$(( $1 / 360000 ))
+        it=$(( $1 - $hours * 360000 ))
+        minutes=$(( $it / 6000 ))
+        it=$(( $1 - $minutes * 6000 ))
+        seconds=$(( $it / 100 ))
+        hundreths=$(( $it - $seconds * 100 ))
+        it="$hours:$minutes:$seconds.$hundreths"
+        echo "${it}"
+}
+
+white_button_mask ()
+{
+	# white_button_mask outfile
+	convert -size ${width}x$menuh -quality 100 xc:transparent -depth 8 -fill white \
+	-draw "roundRectangle $menu_location_x,$menu_location_y,$menuright,$menubottom 20,20" \
+	-draw "Rectangle 0,0,$width,125" \
+	-crop $resolution-0-0 "$1"
+}
+. $MY_DVDMENU_SRC
+
+title_text ()
+{
+	# title_text outfile
+	convert -depth 8 -size $resolution xc:transparent -fill black \
+	-pointsize $title_font_size -gravity NorthWest $font \
+	-draw "text $title_location_x,$title_location_y \"${dvd_title}\"" "$1" 
+}
+
+########################################### end of functions
+
+checkforprog ppmtoy4m
+checkforprog sox
+checkforprog convert
+checkforprog dvdauthor
+if [ "$iso" -eq 1 ] ; then
+	checkforprog mkisofs
+fi
+if [ "$ac3" -eq 1 ] ; then
+        it=`which ffmpeg`
+        if [ -z "$it" ] ; then
+		# no ffmpeg!  use mp2 audio instead:
+		echo "[dvd-menu] Warning:  no ffmpeg found for AC3 audio encoding."
+		echo "[dvd-menu]           Using MP2 audio instead."
+		ac3=0
+	fi
+fi
+
+# verify fonts exist:
+if [ -f "$font1" ] ; then
+        font="-font $font1"
+elif [ -f "$font2" ] ; then
+        font="-font $font2"
+else
+        echo "[dvd-menu] Cannot find required fonts.  Using default ImageMagick font."
+        font=""
+fi
+
+if [ $debug -ge 1 ] ; then
+	echo "[dvd-menu] outdir=$outdir"
+	echo "[dvd-menu] pal=$pal"
+	echo "[dvd-menu] audio files=$audiofile"
+	echo "[dvd-menu] menu titles:" 
+	echo "[dvd-menu] ${title[@]}" 
+fi
+
+if [ ! -d "${outdir}" ] ; then	
+	echo "[dvd-menu] Creating output directory $outdir"
+	mkdir -p "$outdir"
+else
+	## output directory already exists.  Delete old files
+#	echo "[dvd-menu] Output directory already exists. "
+	echo "[dvd-menu] Deleting AUDIO_TS and VIDEO_TS directories..."
+	if [ -d "${outdir}/AUDIO_TS" ] ; then rm -r "${outdir}/AUDIO_TS" ; fi
+	if [ -d "${outdir}/VIDEO_TS" ] ; then rm -r "${outdir}/VIDEO_TS" ; fi
+fi
+
+
+if [ "$no_menu" -eq 0 ] ; then
+	## first, do the background image, then do the alpha mask:
+	if [ -f "${bgfile}" ] ; then
+	        echo "[dvd-menu] using background image ${bgfile}"
+	        convert "${bgfile}" -resize x"$height" -bordercolor black -border "$width"x240 -gravity center -crop "$width"x"$height"'+0+0!' -depth 8 -quality 100 $tmpdir/slideshow_background.ppm
+	        mv "$tmpdir/slideshow_background.ppm" "$tmpdir/menu.ppm"
+	else
+	        ## need to write out a blank image of the given size:
+	        echo "[dvd-menu] creating background image "
+	        convert -depth 8 -size "$width"'x'"$height" gradient:white-$bg_color -type TrueColor "$tmpdir/menu.ppm"
+	fi
+	
+	## create overlay transparent image:
+	convert -depth 8 -colors 3 +antialias -size $resolution xc:transparent $tmpdir/button_background.png
+	cp "$tmpdir/button_background.png" "$tmpdir/menu_mask.png"
+	
+	## check to make sure we have less than 9 buttons?  (size restriction)
+	
+	menuright=$(( $menu_location_x + $menu_width))
+	menubottom=$(( $height + 50 ))  ## add 50 so we can chop off the bottom later
+	menuh=$(( $height + 50 ))
+	if [ "$no_white" -eq 0 ] ; then
+		white_button_mask "$tmpdir/button_background.png"
+		composite -type TrueColor -depth 8 -dissolve 50 "$tmpdir/button_background.png" "$tmpdir/menu.ppm" "$tmpdir/menu.ppm"
+
+		if [ "$numLinksPerColumn" ] ; then
+			#dnlam: make two white areas
+			createSecondMenuArea "$tmpdir/button_background2.png"
+			composite -type TrueColor -depth 8 -dissolve 50 "$tmpdir/button_background2.png" "$tmpdir/menu.ppm" "$tmpdir/menu.ppm"
+		fi
+
+		fixCompositeImage "$tmpdir/menu.ppm"
+	fi
+	
+	## add dvd title text: (only if passed)
+	if [ -n "$dvd_title" ] ; then
+		# dnlam: originally title_location_y=100
+		title_text "$tmpdir/dvd_title.png"
+		composite -depth 8 -type TrueColor "$tmpdir/dvd_title.png" "$tmpdir/menu.ppm" "$tmpdir/menu.ppm"
+	fi
+
+	## loop over each title:
+	let i=0
+	for this_title in "${title[@]}"; do
+		echo "[dvd-menu] Title=$this_title  bgfile=$bgfile  "
+		# make each individual button:
+		# to be fancy, let's add the button layers in two steps.  first the
+		# button background, then the text:
+		convert -size ${menu_width}x$menu_height xc:transparent -quality 100 $font \
+		-pointsize $text_size -draw "text ${text_locX:-20},$text_loc \"${this_title}\"" "$tmpdir/button_text.png"
+		# make each individual button mask (for when it's selected)
+		convert -depth 8 -colors 3 +antialias -size ${menu_width}x$menu_height xc:transparent +antialias \
+		-pointsize $text_size $font -fill red -draw "text ${text_locX:-20},$text_loc \"${this_title}\"" \
+		-quality 100 "$tmpdir/button_mask.png"
+	
+		## add each button as necessary, and increment the location downward
+		composite -type TrueColor -depth 8 -geometry +$menu_location_x+$menu_location_y "$tmpdir/button_text.png" "$tmpdir/menu.ppm" "$tmpdir/menu.ppm"
+		## add each overlay mask for the selection of buttons:
+		# dnlam: used to have '-type TrueColor'
+		composite -depth 8 -colors 3 -quality 100 -geometry +$menu_location_x+$menu_location_y "$tmpdir/button_mask.png" "$tmpdir/menu_mask.png" "$tmpdir/menu_mask.png"
+	
+		## now record the button location:
+		right[$i]="$(( $menu_location_x + $menu_width ))"
+		left[$i]="$(( $menu_location_x ))"
+		top[$i]="$(( $menu_location_y ))"
+		bottom[$i]="$(( $menu_location_y + $menu_height ))"
+		vts="$(( $i + 1 ))"
+		echo "[dvd-menu] i=$i vts=$vts"
+			
+		if [ "$numLinksPerColumn" ] && [ $i -eq $numLinksPerColumn ]; then
+			let menu_location_x=$menu_location_x+$secondColumnOffset
+			let menu_location_y=$menuLocationY
+		else
+			let menu_location_y=$menu_location_y+$menu_height
+		fi
+	
+		let i=$i+1
+	done
+
+	## now convert the menu background to a mpg
+	if [ "$pal" -eq 1 ] ; then
+		ppmtoy4m -v 0 -n "$frames" -r -F 25:1 -A 59:54 -I p "$tmpdir/menu.ppm" | \
+		mpeg2enc -q 6 -4 2 -2 1 -b 8000 -v 0 -a 2 -M 2 -f 8 -o "$tmpdir/menu.mpg"
+	else
+		ppmtoy4m -v 0 -n "$frames" -r -F 30000:1001 -A 10:11 -I p "$tmpdir/menu.ppm" | \
+		mpeg2enc -q 6 -4 2 -2 1 -b 8000 -v 0 -a 2 -M 2 -f 8 -o "$tmpdir/menu.mpg"
+	   #mpeg2enc                        -v 0 -a 2 -M 3 -f 8 -o "$tmpdir/menu.mpg"
+	fi
+	
+	## reduce mask colors to 4:
+	## imagemagick can't seem to create a color depth less than 8 bit, so we need to use NetPBM
+	#pngtopnm "$tmpdir/menu_mask.png" | pnmdepth 3 | pnmtopng -transparent "#7f7f7f" > "$tmpdir/menu_mask_o.png"
+	#mv "$tmpdir/menu_mask_o.png" "$tmpdir/menu_mask.png"
+	
+	# optionally fade out at a certain time?
+	if [ -n "$audiofile" ] ; then
+		## get type of file:  mp3, ogg, or wav
+		suffix=`echo "$audiofile" | awk -F. '{print $NF}'`
+		echo "[dvd-menu] suffix=$suffix"
+		if [ "$suffix" == "mp3" ] ; then
+			checkforprog lame
+		        lame --decode "$audiofile" "$tmpdir/audio_tmp.wav"
+			# convert it to 48khz:
+			sox -v 0.90 "$tmpdir/audio_tmp.wav" -r 48000 "$tmpdir/audio.wav"
+			rm "$tmpdir/audio_tmp.wav"
+		elif [ "$suffix" == "ogg" ] ; then
+			checkforprog oggdec
+		        oggdec -o "$tmpdir/audio_tmp.wav" "$audiofile"
+			# convert it to 48khz:
+			sox -v 0.90 "$tmpdir/audio_tmp.wav" -r 48000 "$tmpdir/audio.wav"
+			rm "$tmpdir/audio_tmp.wav"
+		elif [ "$suffix" == "wav" ] ; then
+	#	        cp "$audiofile" "$tmpdir/audio_tmp.wav"
+			# convert it to 48khz:
+			sox -v 0.90 "$audiofile" -r 48000 "$tmpdir/audio.wav"
+		else
+		        echo "[dvd-menu] ERROR:  Unknown audio file format.  Must be .mp3, .ogg, or .wav"
+		fi
+	else
+		## create silence:  
+		echo "[dvd-menu] creating silence .wav file"
+		sox -t raw -s -w -c 2 -r 48000 /dev/zero -t wav - trim 0 0:01 > "$tmpdir/audio.wav"
+	fi
+	
+
+	if [ "$ac3" -eq 1 ] ; then
+	        checkforprog ffmpeg
+	        echo "[dvd-menu] Creating ac3 audio..."
+	        check_rm "$tmpdir/audio.ac3"
+	        ffmpeg -i "$tmpdir/audio.wav" -vn -y -ab 192 -acodec ac3 -ar 48000 -ac 6 "$tmpdir/audio.ac3"
+	else
+		## toolame is way faster! (3x in my test)
+		it=`which toolame`
+		if [ -n "$it" ] ; then
+		        toolame_version=`toolame -h | head -4 | grep version | awk '{ print $3 }'`
+		        echo "[dvd-menu] using toolame $toolame_version..."
+		        if [ "$toolame_version" == '0.2m' ] ; then
+		        	toolame -s 48000 -b 128 "$tmpdir/audio.wav" "$tmpdir/audio.mp2"
+		        else
+		        	toolame -s 48 -b 128 "$tmpdir/audio.wav" "$tmpdir/audio.mp2"
+		        fi
+		else
+		        echo "[dvd-menu] using mp2enc"
+		        mp2enc -v 0 -b 128 -r 48000 -s -o "$tmpdir/audio.mp2" < "$tmpdir/audio.wav"
+		fi
+	fi
+	
+
+	## now multiplex the audio and video:
+	echo "[dvd-menu] mplexing the files............."
+	if [ "$ac3" -eq 1 ] ; then
+		mplex -v 0 -f 8 -o "$tmpdir/menu_t.vob" "$tmpdir/menu.mpg" "$tmpdir"/audio.ac3
+	else
+		mplex -v 0 -f 8 -o "$tmpdir/menu_t.vob" "$tmpdir/menu.mpg" "$tmpdir"/audio.mp2
+		#dnlam: used to be 
+	  #'mplex -v 0 -f 8 -o "$tmpdir/menu_t.mpg" "$tmpdir/menu.mpg" "$tmpdir"/audio.mp2'
+	fi
+
+	## start of button subpicture XML file creation for spumux:
+	## now define the buttons:
+	echo '<subpictures>' > "$tmpdir/menu.spumux"
+	echo '	<stream>' >> "$tmpdir/menu.spumux"
+	echo -n '		<spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$tmpdir/menu.spumux"
+	echo "$tmpdir/menu_mask.png"'" force="yes" >' >> "$tmpdir/menu.spumux"
+	## now loop over the buttons:
+	let i=0
+	for it in "${left[@]}"; do
+		echo '			<button x0="'${left[$i]}'" y0="'${top[$i]}'" x1="'${right[$i]}'" y1="'${bottom[$i]}'" />' >> "$tmpdir/menu.spumux"
+	#	echo '			<action label="'${title[$i]}'" />' >> "$tmpdir/menu.spumux"
+		let i=$i+1
+	done
+	echo '		</spu>' >> "$tmpdir/menu.spumux"
+	echo '	</stream>' >> "$tmpdir/menu.spumux"
+	echo '</subpictures>' >> "$tmpdir/menu.spumux"
+
+	echo "[dvd-menu] ###############################################"
+	echo "[dvd-menu] spumuxing the files............."
+	## using spumux now:
+	spumux -v 0 -P "$tmpdir/menu.spumux" < "$tmpdir/menu_t.vob" > "$tmpdir/menu.vob"
+	# dnlam: originally: spumux -v 0 -P "$tmpdir/menu.spumux" < "$tmpdir/menu_t.mpg" > "$tmpdir/menu.mpg"
+	echo "dnlam: $tmpdir/menu.vob"
+
+fi   # end if we're actually making a menu.  otherwise, just to the stuff below
+
+## now build the dvdauthor xml file:
+## do we need "jumppad"?
+echo '<dvdauthor dest="'${outdir}'" jumppad="0">' > "$tmpdir/vmgm.xml"
+echo '        <vmgm>' >> "$tmpdir/vmgm.xml"
+echo '           <menus>' >> "$tmpdir/vmgm.xml"
+
+if [ "$no_menu" -eq 0 ] ; then
+	echo '               <pgc entry="title" >' >> "$tmpdir/vmgm.xml"
+	echo '                    <vob file="'$tmpdir/menu.vob'" pause="inf"/>' >> "$tmpdir/vmgm.xml"
+	#dnlam originally: echo '                    <vob file="'menu-${outf_suffix}.mpg'" pause="inf"/>' >> "$tmpdir/vmgm.xml"
+	## now loop over each title:
+	let i=1   ## titles start from 1, not zero.
+	let m=1   ## menus start at 1
+	echo "[dvd-menu] xmlfile=${xmlfile[@]}"
+	for it in "${xmlfile[@]}"; do
+		file_base=`basename "$it" .xml`
+		if [ -f "$file_base"_submenu.xml ] ; then
+			echo '             		<button> jump menu '$m'; </button>' >> "$tmpdir/vmgm.xml"
+			let m=$m+1
+		else
+			echo '             		<button> jump title '$i'; </button>' >> "$tmpdir/vmgm.xml"
+		fi
+		let i=$i+1
+		let m=$m+1
+	done
+	#dnlam: Main menu button
+	#echo '                  <button> jump vmgm menu 1; </button>' >> "$tmpdir/vmgm.xml"
+	echo '                    <post> jump vmgm menu 1; </post>' >> "$tmpdir/vmgm.xml"
+	echo '                </pgc>' >> "$tmpdir/vmgm.xml"
+fi
+
+echo '           </menus>' >> "$tmpdir/vmgm.xml"
+echo '        </vmgm>' >> "$tmpdir/vmgm.xml"
+echo '        <titleset>' >> "$tmpdir/vmgm.xml"
+
+## now cat the other ones into this file...
+let i=0   
+let title=1   
+let m=1   
+
+## get rid of existing files:
+check_rm "$tmpdir/menus_vmgm.xml"
+
+## every dvd has at least one title!
+echo '	<titles>' > "$tmpdir/titles_vmgm.xml"
+
+total_files="${#xmlfile[@]}"
+for it in "${xmlfile[@]}"; do
+	if [ "$(( $i + 1 ))" -eq "$total_files" ] ; then continuous=0 ; fi
+	let j=$i+2
+	echo "[dvd-menu] file=${xmlfile[$i]}"
+#	echo "[dvd-menu] it=$it"
+	suffix=`echo ${xmlfile[$i]} | awk -F. '{print $NF}'`
+	file_base=`basename "$it" .xml`
+	nextmenu=$(( $m + 1 ))
+	lastmenu=$(( $m - 1 ))
+#	echo "[dvd-menu] suffix=$suffix"
+	if [ "$suffix" == 'xml' ] ; then
+		if [ -f "$file_base"_submenu.xml ] ; then
+			if [ $m -eq 1 ] ; then
+				## first menu!
+				echo '	<menus>' > "$tmpdir/menus_vmgm.xml"
+                                echo '               <pgc entry="root" >' >> "$tmpdir/menus_vmgm.xml"
+			else
+                                echo '               <pgc>' >> "$tmpdir/menus_vmgm.xml"
+			fi
+			## read in submenu for this title:
+			cat "$file_base"_submenu.xml | sed -e "s/thetitle/title $title/g" \
+			| sed -e "s/nextmenu/$nextmenu/" >> "$tmpdir/menus_vmgm.xml"
+			echo '		<post> jump menu '$m'; </post>' >> "$tmpdir/menus_vmgm.xml"
+			echo '		</pgc>' >> "$tmpdir/menus_vmgm.xml"
+			let m=$m+1
+			nextmenu=$(( $m + 1 ))
+			lastmenu=$(( $m - 1 ))
+		fi
+		# parse in either the chapter select menus or the
+		#  browsable slideshow for this title:
+		let n=1
+		if [ -f "$file_base"_browse.xml ] ; then
+			## read in browsable slideshow
+				## read in chapter menu:
+				cat "$file_base"_browse.xml >> "$tmpdir/menus_vmgm.xml"
+				let m=$m+1
+				nextmenu=$(( $m + 1 ))
+				lastmenu=$(( $m - 1 ))
+		elif [ -f "$file_base"_chap_$n.xml ] ; then
+			## read in chapter select menu
+			while [ -f "$file_base"_chap_$n.xml ] ; do
+				if [ $m -eq 1 ] ; then
+					## first menu!
+					echo '	<menus>' > "$tmpdir/menus_vmgm.xml"
+	                                echo '               <pgc entry="root" >' >> "$tmpdir/menus_vmgm.xml"
+				else
+	                                echo '               <pgc>' >> "$tmpdir/menus_vmgm.xml"
+				fi
+				## read in chapter menu:
+				cat "$file_base"_chap_$n.xml | sed -e "s/title 1/title $title/g" \
+				| sed -e "s/nextmenu/$nextmenu/" | sed -e "s/lastmenu/$lastmenu/" >> "$tmpdir/menus_vmgm.xml"
+				echo '		<post> jump menu '$m'; </post>' >> "$tmpdir/menus_vmgm.xml"
+				echo '		</pgc>' >> "$tmpdir/menus_vmgm.xml"
+				let m=$m+1
+				let n=$n+1
+				nextmenu=$(( $m + 1 ))
+				lastmenu=$(( $m - 1 ))
+			done
+		fi
+		## xml file exists:  use it!
+#		echo '	<titles>' >> "$tmpdir/titles_vmgm.xml"
+#		echo '         <subpicture lang="EN" />' >> "$tmpdir/titles_vmgm.xml"
+		echo '		<pgc>' >> "$tmpdir/titles_vmgm.xml"
+		cat "${xmlfile[$i]}" >> "$tmpdir/titles_vmgm.xml"
+		if [ "$continuous" -eq 1 ] ; then
+			echo "		<post> jump title $j; </post>" >> "$tmpdir/titles_vmgm.xml"
+		elif [ "$no_menu" -eq 0 ] ; then
+			echo '		<post> call vmgm menu 1; </post>' >> "$tmpdir/titles_vmgm.xml"
+		fi
+		echo '		</pgc>' >> "$tmpdir/titles_vmgm.xml"
+#		echo '	</titles>' >> "$tmpdir/titles_vmgm.xml"
+	elif [ "$suffix" == 'mpg' ] || [ "$suffix" == 'vob' ]; then
+		## assume user already made it vob compatible	
+		## write the title xml:
+#		echo '	<titles>' >> "$tmpdir/titles_vmgm.xml"
+		echo '		<pgc>' >> "$tmpdir/titles_vmgm.xml"
+		echo '		<vob file="'${xmlfile[$i]}'"  />' >> "$tmpdir/titles_vmgm.xml"
+		if [ "$continuous" -eq 1 ] ; then
+			echo "		<post> jump title $j; </post>" >> "$tmpdir/titles_vmgm.xml"
+		elif [ "$no_menu" -eq 0 ] ; then
+			echo '		<post> call vmgm menu 1; </post>' >> "$tmpdir/titles_vmgm.xml"
+		fi
+		echo '		</pgc>' >> "$tmpdir/titles_vmgm.xml"
+#		echo '	</titles>' >> "$tmpdir/titles_vmgm.xml"
+	else
+		echo '[dvd-menu] error... filetype not supported!'
+		exit
+	fi
+	let i=$i+1
+	let title=$title+1
+done
+
+## finish up menus tag:
+if [ $m -gt 1 ] ; then  # only if we had submenus:
+	echo '	</menus>' >> "$tmpdir/menus_vmgm.xml"
+fi
+
+## finish up titles tag:
+echo '	</titles>' >> "$tmpdir/titles_vmgm.xml"
+
+## join the menus and titles with the vmgm menu:
+if [ -f "$tmpdir/menus_vmgm.xml" ] ; then # only if submenus exist!
+	cat "$tmpdir/menus_vmgm.xml" >> "$tmpdir/vmgm.xml"
+fi
+cat "$tmpdir/titles_vmgm.xml" >> "$tmpdir/vmgm.xml"
+
+echo '</titleset>' >> "$tmpdir/vmgm.xml"
+echo '</dvdauthor>' >> "$tmpdir/vmgm.xml"
+
+echo "[dvd-menu] ##############################"
+
+## run dvdauthor?
+if [ "$no_dvdauthor" -eq 0 ] ; then
+	echo "[dvd-menu] Running dvdauthor..."
+	dvdauthor -o "$outdir" -x "$tmpdir/vmgm.xml"
+	if [ "$iso" -eq 1 ] ; then
+		## create iso image afterward:
+		echo "[dvd-menu] Creating iso image dvd.iso"
+		mkisofs -dvd-video -udf -o dvd.iso "$outdir"
+	fi
+else
+	echo "[dvd-menu] Not running dvdauthor.  Edit the vmgm.xml file"
+	echo "[dvd-menu] if you wish, and then run dvdauthor: "
+	echo "[dvd-menu] dvdauthor -x vmgm.xml"
+	echo " "
+fi
+
+cleanup
+

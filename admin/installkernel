@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# called by /usr/src/linux/arch/i386/boot/install.sh,
+# which is called by /usr/src/linux/make install
+
+# args: 2.6.8-041205 arch/i386/boot/bzImage System.map
+
+echo "Running my own ~/bin/installkernel: $@"
+
+cp -iv $2 /boot/bzImage-$1
+cp -iv $3 /boot/System.map-$1
+cp -iv .config /boot/config-$1
+cp -iv .config /boot/config-last
+
+echo "# added by ~/bin/installkernel
+title Linux $1
+	kernel (hd0,2)/boot/bzImage-$1 root=/dev/hda3 vga=775
+	" >> /boot/grub/menu.lst
+
+echo "Hit a key to edit grub menu"
+read -n 1
+
+vim -c `wc -l /boot/grub/menu.lst`
+
+echo "Remember to rebuild: submount, slmodem, (alsa, nvidia)"
+
+cat <<EOF
+To extract the .config file from the kernel, boot into the kernel and
+	gunzip --to-stdout /proc/config.gz > "config-`uname -r`"
+EOF

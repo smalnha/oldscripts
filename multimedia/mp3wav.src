@@ -1,0 +1,65 @@
+#!/bin/bash
+
+function mp3ext(){
+	for i in *.[Mm][Pp]3; do 
+		local BASEFNAME=$i
+		BASEFNAME=`myBasename "$BASEFNAME" '.*'`
+		#echo $BASEFNAME
+		if [ "$BASEFNAME" != "$i" ] ; then
+			echo "Lowercasing extension of $i"
+			mv "$i" "${BASEFNAME}.mp3"
+		fi
+	done
+}
+function mp3spaces(){
+	for i in *.mp3; do mv "$i" `echo $i | tr ' ' '_'`; done
+}
+alias mp3wav-A='for i in *.mp3; do mpg123 -w `basename $i .mp3`.wav $i; done'
+alias mp3wav-B='for i in *.mp3; do madplay -o `basename $i .mp3`.wav $i; done'
+alias mp3wav-C='for i in *.mp3; do lame --decode $i `basename $i .mp3`.wav; done'
+
+alias ripCD='cdparanoia -B'
+alias wavmp3-C='for i in *.wav; do lame -h $i `basename $i .wav`.mp3; done'
+
+# If there are files with different characteristics, convert them to the above specs. For example, to convert file track01.wav to obtain sample rate 44.1 kHz, you could use: 
+function mp3sox-A(){
+	sox $1 -r 44100 `myBasename $1 .wav`-fixed.wav resample
+}
+function mp3sox-B(){
+	sox $1 -r 44100 -c 2 `myBasename $1 .wav`-fixed.wav
+}
+
+# to avoid drastic differences in volume levels
+# http://www.cs.columbia.edu/~cvaill/normalize/
+alias normalize='normalize -m '
+
+function mp3wav(){
+	mp3ext
+	command ls >> ../`myBasename $PWD`.lst
+	mkdir ../mp3wav
+	rm -f ../mp3wav/*
+	for i in ${1:-*.[Mm][Pp]3} ; do
+		local WAVFILE=`myBasename "$i" .mp3 | tr ' ' '_'`
+		mpg123 -w "../mp3wav/${WAVFILE}.wav" "$i"
+		# file ../mp3wav/${WAVFILE}.wav
+	done
+	cd ../mp3wav
+}
+
+alias cdscan='cdrecord --scanbus'
+CD_DEVICE_ID="0,0,0"
+
+function cdburn(){
+	sudo cdrecord dev=$CD_DEVICE_ID -v -eject speed=24 -pad -audio *.wav
+}
+
+# may want to try Grip or cdparanoia (chmod 777 /dev/sg0) for ripping
+# oggenc for wav->ogg
+# oggdec for ogg->wav
+# oggdec track03.cdda.ogg -o totoro3.wav
+# oggdec filename.ogg -o - | lame - filename.mp3
+# and then K3b
+echo "Instructions: cd MP3_DIR; mp3wav; cdburn"
+
+
+

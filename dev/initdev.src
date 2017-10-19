@@ -1,0 +1,131 @@
+#!/bin/bash
+
+case "$HOSTNAME" in
+    oxlips.ece.utexas.edu)
+    	export JAVA_HOME="$HOME/development/lib/unix/java-sdk/j2sdk1.4.2_02"
+    ;;
+    *)
+    	[ -d "$JAVA_HOME" ] || for JAVA_DIR in /usr/local/lib/java; do
+			if [ -f "$JAVA_DIR"/bin/javac ]; then
+				export JAVA_HOME="$JAVA_DIR"
+			fi
+		done
+		[ -d "$ANT_HOME" ] || for ANT_DIR in ~/NOBACKUP/apache-ant* ~/NOBACKUP/dev/apache-ant* /usr/share/ant; do
+			if [ -f "$ANT_DIR"/bin/ant ]; then
+				export ANT_HOME="$ANT_DIR"
+			fi
+		done
+    ;;
+esac
+
+echo "Using JAVA_HOME=$JAVA_HOME"
+echo "Using ANT_HOME=$ANT_HOME"
+
+addToMyPath "$JAVA_HOME/bin"
+addToMyPath "$ANT_HOME/bin"
+
+# ant completion
+if [ -f "$ANT_HOME/bin/complete-ant-cmd.pl" ]; then
+	complete -C $ANT_HOME/bin/complete-ant-cmd.pl ant
+else
+	echo "Configuring autocomplete for 'ant'"
+	_ant(){
+		local cur prev pscommand
+		COMPREPLY=()
+		#cur=${COMP_WORDS[COMP_CWORD]}
+		# if we have a partial word to complete, restrict completions to
+		# matches of that word
+		# if [ -n "$2" ]; then gcmd='grep "^$2"' ; else gcmd=cat ; fi
+		 COMPREPLY=( 
+			$( grep -o "\<target name=\"$2[^\"]*" build.xml | \
+			tr -d \"| sed "s/target name=//" ) )
+		return 0
+	}
+	complete -F _ant ant
+fi 
+
+if ! [ "$1" = "" ]; then
+	echo --------- listing environment variables ---------------
+	printenv | grep HOME
+	printenv | grep PATH
+	echo --------- ----------------------------- ---------------
+fi
+
+# for tmpLIPS_DEV in ~/development $LIPS_DEV ; do
+# 	if [ -f $tmpLIPS_DEV/scripts/unix_common/bash/setenv-force.sh ]; then
+# 		pushd . > /dev/null
+# 		cd $tmpLIPS_DEV/scripts/unix_common/bash/
+# 		. setenv-force.sh
+# 		popd > /dev/null
+# 		# already called by setenv: . $LIPS_DEV/scripts/unix_common/bash/.lips_rc
+# 		break;
+# 	fi
+# done
+# 
+# [ "$LIPS_DEV" ] && addToMyPath -var CDPATH "$LIPS_DEV"
+# [ "$LIPS_SRC" ] && addToMyPath -var CDPATH "$LIPS_SRC/edu/utexas/lips" "$LIPS_GEN"
+
+[ -f "$JAVA_HOME/jre/lib/rt.jar" ] && export JK_CLASSPATH="$JAVA_HOME/jre/lib/rt.jar"
+# for JARFILE in /usr/share/eclipse/plugins/{*.jar,*/} ; do
+# 	JK_CLASSPATH="$JK_CLASSPATH:$JARFILE"
+# done;
+# unset JARFILE
+
+function jv(){
+	$JAVA_HOME/bin/java -classpath "$CLASSPATH:$JK_CLASSPATH" "$@"
+}
+function jvws(){
+	$JAVA_HOME/bin/javaws "$@"
+}
+function jk(){
+	# +M option causes errors in jikes 1.21
+	jikes +E -classpath "$CLASSPATH:$JK_CLASSPATH" -d ${LIPS_GEN:-.}/class "$@"
+}
+alias javac='jk'
+function jcc(){
+	if [ -f $LIPS_LIB/java/javacc.jar ]; then
+		$JAVA_HOME/bin/java -classpath $LIPS_LIB/java/javacc.jar javacc "$@"
+
+	else
+		echo "$LIPS_LIB/java/javacc.jar not found."
+	fi
+}
+function jvdoc(){
+	$PACKAGENAME=$1
+	javadoc -classpath ".:$CLASSPATH:$JK_CLASSPATH" -subpackages $PACKAGENAME -d $LIPS_GEN/doc/$PACKAGENAME
+}
+
+#alias cd-tracer='cd ${LIPS_DEV}/src/edu/utexas/lips/agent_design/dacat/tools/tracer'
+#alias cd-uav='cd ${LIPS_DEV}/src/edu/utexas/lips/domain_specific/metron_planning'
+#alias cd-tgraph='cd ${LIPS_DEV}/src/com/touchgraph'
+#alias acl='${LIPS_LIB}/unix/acl/acl62/alisp'
+
+#export TRACE_FLAG=true
+#alias dacat='pushd .; cd ${LIPS_GEN}/class; java -classpath $JK_CLASSPATH -Dproperty.file=$PROPERTY_FILE edu.utexas.lips.agent_design.dacat.Dacat $*; popd'
+
+jkvim(){
+	java_compile_errors=java_compile_errors
+	jk $* 2>&1 | tee $java_compile_errors
+	if grep -q "Error:" $java_compile_errors ; then
+		read -p "Hit a key to go to vim"
+		vim -q $java_compile_errors
+	fi
+}
+
+antvim(){
+	java_compile_errors=java_compile_errors
+	ant 2>&1 | tee $java_compile_errors
+	if grep -q "Error:" $java_compile_errors ; then
+		sed 's/\[javac\] /\[javac\]\n/' -i $java_compile_errors
+		read -p "Hit a key to go to vim"
+		vim -q $java_compile_errors
+	fi
+}
+
+loc(){
+	let i=0
+	find . -iname '*.java' -exec wc -l {} \; | sort -n | cut -d' ' -f 1 | while read j; do let i+=j; echo $i; done
+} 
+
+
+

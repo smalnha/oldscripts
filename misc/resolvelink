@@ -1,0 +1,139 @@
+:
+##########################################################################
+# Title      :	resolvelink - resolve symbolic links
+# Author     :	Heiner Steven <heiner.steven@odn.de>
+# Date       :	1997-10-27
+# Requires   :	
+# Category   :	File Utilities
+# SCCS-Id.   :	@(#) resolvelink	1.2 03/12/19
+##########################################################################
+# Description
+#
+##########################################################################
+
+PN=`basename "$0"`			# Program name
+VER='1.2'
+
+MAXHOPS=30
+
+Usage () {
+    echo >&2 "$PN - resolve symbolic links, $VER (hs 10/97)
+usage: $PN [file | directory] [...]
+
+Each line starts with an classification character:
+    #	absolute path name of the starting link
+    >	link to another link
+    +	link resolved (entry is listable)
+    -	link resolved (entry is invalid)
+    !	error, i.e. too many hops (more than $MAXHOPS)"
+    exit 1
+}
+
+Msg () {
+    for MsgLine
+    do echo >&2 "$PN: $MsgLine"
+    done
+}
+
+Fatal () { Msg "$@"; exit 1; }
+
+RelToAbs () {
+    for RelPath
+    do
+    	Dir=`dirname "$RelPath"`
+	Dir=`cd $Dir; pwd`
+	# Work around for SOLARIS 2.5 ksh93 bug ("cd" prints new directory)
+	Dir=`echo "$Dir" | sed q`
+	case "$RelPath" in
+	    */)	Base=`basename \`echo "$RelPath"\` | sed 's:/[/]*$::'`;;
+	    *)	Base=`basename "$RelPath"`;;
+	esac
+	echo "$Dir/$Base"
+    done
+}
+
+Resolve () {
+    for SymLink
+    do
+    	L=`RelToAbs "$SymLink"`
+	Indent=
+	HopCount=0
+	(
+	while [ -h "$L" ]
+	do
+	    if [ -z "$Indent" ]
+	    then
+	    	echo "# $L"
+	    	Indent=">	"
+	    else
+		echo "${Indent}$L	`RelToAbs \"$L\"`"
+	    fi
+
+	    ParentDir=`dirname "$L"`
+	    [ -n "$ParentDir" -a -d "$ParentDir" ] || {
+	    	Msg "could not determine parent directory for $L"
+		break
+	    }
+	    cd "$ParentDir"
+	    BaseName=`basename "$L"`
+	    [ -n "$BaseName" ] || {
+	    	Msg "could not determine basename for $L"
+		break
+	    }
+	    Ref=`ls -ld "$BaseName" | awk '{print $NF}'`
+	    if [ -n "$Ref" ]
+	    then
+	    	if [ "$L" != "$Ref" ]
+		then
+		    L="$Ref"
+		else				# direct loop (i.e. "a -> a")
+		    echo "! loop detected - $Ref (`pwd`)"
+		    break
+		fi
+	    else
+	    	Msg "could not list link $L - should not occur"
+		break;
+	    fi
+	    HopCount=`expr $HopCount + 1`
+	    if [ ${HopCount:=0} -gt $MAXHOPS ]
+	    then
+	    	echo "! too many links (more than $MAXHOPS): $Ref (`pwd`)"
+		break
+	    fi
+	done
+
+	# Ref contains the last (relative) path of the symbolical
+	# link chain
+
+	if [ X`ls -d "$Ref" 2>/dev/null` != X ]
+	then
+	    echo "+	$Ref	`RelToAbs $Ref`"
+	else
+	    echo "-	$Ref"
+	fi
+	)
+    done
+}
+
+verbose=no
+set -- `getopt h "$@"`
+while [ $# -gt 0 ]
+do
+    case "$1" in
+	-v)	verbose=yes;;
+	--)	shift; break;;
+	-h)	Usage;;
+	-*)	Usage;;
+	*)	break;;			# First file name
+    esac
+    shift
+done
+
+[ $# -lt 1 ] && set -- *		# Default: current directory
+
+find "$@" -type l -print |
+	while read Link ignore
+	do
+	    [ -h "$Link" ] || continue
+	    Resolve "$Link"
+	done

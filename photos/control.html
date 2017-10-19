@@ -1,0 +1,178 @@
+<html>
+<head>
+<script type="text/javascript">
+
+var htm_prefix = top.subdir+"html/";
+var htm_suffix = ".htm";
+
+var commonURL=location.href.split('control.html')[0];
+//alert("location="+commonURL);
+
+function goHome(){
+	//confirm("WEBSERVER3="+location.href.split('control.html')[0]+ "../"+top.reldepth);
+	window.top.location=commonURL+"../"+top.reldepth+"/index.html";
+}
+
+function updatePhotoText(){
+	parent.photo.document.fgColor=top.thumbtext_color;
+	//alert((top.counter+1)+" "+(delayTime));
+	//alert(currentPhoto+" href="+parent.photo.location.href+" .indexOf(currentPhoto)"+" ");
+	if ( parent.photo.location.href.indexOf(top.counter+htm_suffix) == -1 ) { // if the photo get out of sync (due to user interaction - pressent prev and next.)
+		pause();
+		// sync it up
+		var urlStr=parent.photo.location.href.split("html/")[1];
+		urlStr=urlStr.split(".htm")[0];
+		top.counter=parseInt(urlStr)
+		scroll(commonURL+"thumbs.html");
+		// alert("top.counter="+top.counter+" urlStr"+urlStr);
+	}
+}
+
+function showPhoto(index){
+	if ((top.counter >= 0) && (top.counter < top.numpics)){
+		// restore last photo
+		if (parent.thumbnails.document.layers)
+			parent.thumbnails.document.layers["cell_"+top.counter].bgColor = "#333333";
+		else if (parent.thumbnails.document.all)
+			parent.thumbnails.document.all["cell_"+top.counter].style.background = "#333333";
+		else
+			parent.thumbnails.document.images[top.counter].vspace=3;
+	}
+	if (index < 0){
+		pause();
+		if (confirm("Reached beginning of photos. \nPress OK to go to the last photo."))
+			top.counter=top.numpics-1;
+		else
+			top.counter=0;
+	} else if (index < top.numpics)
+		top.counter=index;
+	else {
+		//alert("showPhoto "+index);
+		var wasPaused=paused;
+		pause();
+		if (confirm("Reached end of photos. \nPress OK to go to the first photo.")){
+			top.counter=0;
+			if (wasPaused==0) playSlideShow();
+		} else
+			top.counter=top.numpics-1;
+	}
+
+	var currentPhoto=htm_prefix+ top.counter + htm_suffix;
+//alert("currentPhoto="+currentPhoto+" "+top.counter);
+	parent.photo.location=currentPhoto;
+	//parent.photo.location.reload();
+//alert("here "+parent.photo.document.href+" "+parent.thumbnails.document.layers);
+
+	window.status = "Viewing image "+top.counter+": "+top.vThumb[top.counter];
+//doesn't work here	updatePhotoText();
+}
+
+function scroll(thumbsHTML){
+/*	index=top.counter;
+	if (index<-1) {
+		confirm(index);
+		index=-1;
+	}*/
+	if (parent.thumbnails.document.layers)
+		parent.thumbnails.document.layers["cell_" + top.counter].bgColor = "green";
+	else if (parent.thumbnails.document.all)
+		parent.thumbnails.document.all["cell_"+top.counter].style.background = "green";
+	else
+		parent.thumbnails.document.images[top.counter].vspace=20;
+
+	if (parent.thumbnails != null){
+		parent.thumbnails.document.location = thumbsHTML+"#img_"+top.counter;
+		parent.thumbnails.window.scrollBy(0,-40);
+//	parent.thumbnails.window.scrollBy(0,-parent.thumbnails.document.body.clientHeight/3);
+	}
+}
+
+function showPhotoAndScroll(index){
+	showPhoto(index);
+	scroll("thumbs.html");
+
+	if (paused == 0) 
+		playingInterval = window.setTimeout('showPhotoAndScroll(top.counter+1)', delayTime);
+}
+
+function pause(){
+	if(paused == 0){
+		//alert("pause");
+		//clearInterval(playingInterval);
+		window.clearTimeout(playingInterval);
+		document.images[index_playImg].src="buttons/"+playMode+".png";
+		document.images[index_pauseImg].src="buttons/pause_down.png"
+		paused=1;
+	}
+}
+
+var playingInterval=null;
+var index_pauseImg=1;
+var index_playImg=2;
+var paused=1;
+var playMode="play";
+var playDelay=5000;
+var ffDelay=3000;
+var fffDelay=1500;
+var delayTime=playDelay;
+
+function playSlideShow(){
+//	alert("playSlideShow "+(top.counter+1));
+	if (paused > 0){ //if paused, unpause and use current delayTime
+		document.images[index_pauseImg].src="buttons/pause.png";
+		paused=0;
+		showPhotoAndScroll(top.counter+1);
+		//alert("back in playSlideShow");
+	} else {
+		if (playMode=="fff"){
+			delayTime=playDelay;
+			playMode="play";
+		} else if (playMode=="play"){
+			delayTime=ffDelay;
+			playMode="ff";
+		} else if (playMode=="ff"){
+			delayTime=fffDelay;
+			playMode="fff";
+		}
+		//clearInterval(playingInterval);
+		//window.clearTimeout(playingInterval);
+		//showPhoto(top.counter+1);
+	}
+	if (paused == 0)
+		document.images[index_playImg].src="buttons/"+playMode+"_down.png";
+	//playingInterval = setInterval("showPhotoAndScroll(top.counter+1)", delayTime);
+//	alert("playSlideShow done");
+}
+
+function done(){
+	pause();
+	parent.photo.location="instructs.html"
+}
+
+function pauseShowPhoto(indx){
+	//alert("pauseShowPhoto");
+	pause();
+	showPhotoAndScroll(indx);
+}
+
+function photoClicked(indx){
+	//alert("photoClicked");
+	pause();
+	showPhoto(indx);
+}
+
+</script>
+</head>
+
+<body bgcolor="#000000" text="#FFFFFF">
+<center>
+<img border=0 vspace=2 hspace=10 onClick="goHome();" alt="Photos home" src="buttons/home.gif">
+<img border=0 vspace=5 hspace=2 name="pauseBtn" onClick="pause();" alt="pause" src="buttons/pause_down.png">
+<img border=0 vspace=5 hspace=2 name="playBtn"  onClick="playSlideShow();" alt="play" src="buttons/play.png">
+<br>
+<img border=0 height=30 onClick="done();" alt="instructions" src="buttons/instructs.jpg">
+<img border=0 height=30 onClick="pauseShowPhoto(top.counter-1);" alt="previous" src="buttons/prev.gif">
+<img border=0 height=30 onClick="pauseShowPhoto(top.counter+1);" alt="next" src="buttons/next.gif">
+</center>
+</body>
+</html>

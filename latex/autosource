@@ -1,0 +1,30 @@
+#!/bin/bash
+
+alias eqn2png='$MY_BIN/latex/tex2im -r 150x150 -z'
+
+psToEps(){
+	EPSFILE=`basename $1 .ps`.eps
+	convert $1 $EPSFILE 
+	$MY_BIN/latex/bbox_add.pl --padding=${PADDING:-5} --keep $EPSFILE
+    sed -i '/%%HiResBoundingBox/d' $EPSFILE
+	# uses 'gs -sDEVICE=bbox -dNOPAUSE -dBATCH file.ps' to get boundingbox
+}
+epsToPng(){
+	EPSFILE=$1
+	shift
+	convert -density ${PNG_DENSITY:-300} $* $EPSFILE `basename $EPSFILE .eps`.png
+	# see tex2im to make png transparent
+}
+
+# epsTopng(){
+# 	EPSFILE=$1
+# 	shift
+# 	sed -i -e '/^%%HiResBoundingBox/d' $EPSFILE
+# 	convert -density ${PNG_DENSITY:-300} $* $EPSFILE `basename $EPSFILE .eps`.png
+# }
+
+psToPng(){
+	psToEps $1
+    epsToPng `basename $1 .ps`.eps
+}
+

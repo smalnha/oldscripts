@@ -1,0 +1,199 @@
+# Conky sample configuration
+#
+# the list of variables has been removed from this file in favour
+# of keeping the documentation more maintainable.
+# Check http://conky.sf.net for an up-to-date-list.
+
+# set to yes if you want Conky to be forked in the background
+background none
+
+# X font when Xft is disabled, you can pick one with program xfontsel
+#font 5x7
+#font 6x10
+#font 7x13
+#font 8x13
+#font 9x15
+#font *mintsmild.se*
+#font -*-*-*-*-*-*-34-*-*-*-*-*-*-*
+font 6x13
+
+# Use Xft?
+use_xft none
+
+# Xft font when Xft is enabled
+xftfont Bitstream Vera Sans Mono:size=8
+
+# Text alpha when using Xft
+xftalpha 0.5
+
+# Print everything to stdout?
+# out_to_console none
+
+# MPD host/port
+# mpd_host localhost
+# mpd_port 6600
+# mpd_password tinker_bell
+
+# Print everything to console?
+# out_to_console none
+
+# mail spool
+mail_spool $MAIL
+
+# Update interval in seconds
+update_interval 5.0
+
+# This is the number of times Conky will update before quitting.
+# Set to zero to run forever.
+total_run_times 0
+
+# Create own window instead of using desktop (required in nautilus)
+own_window yes
+
+# If own_window is yes, you may use type normal, desktop or override
+#own_window_type no
+
+# Use pseudo transparency with own_window?
+own_window_transparent yes
+
+# If own_window_transparent is set to no, you can set the background colour here
+own_window_colour hotpink
+
+# If own_window is yes, these window manager hints may be used
+own_window_hints undecorated,below,sticky,skip_taskbar,skip_pager
+
+# Use double buffering (reduces flicker, may not work for everyone)
+double_buffer yes
+
+# Minimum size of text area
+minimum_size 280 5
+
+# Draw shades?
+draw_shades none
+default_shade_color red
+
+# Draw outlines?
+draw_outline none
+default_outline_color green
+
+# Draw borders around text
+draw_borders none
+default_color white
+
+# Draw borders around graphs
+draw_graph_borders none
+
+# Stippled borders?
+stippled_borders 0
+
+# border margins
+border_margin 4
+
+# border width
+border_width 1
+
+# Text alignment, other possible values are commented
+#alignment top_left
+alignment top_right
+#alignment bottom_left
+#alignment bottom_right
+#alignment none
+
+# Gap between borders of screen and text
+# same thing as passing -x at command line
+gap_x 5
+gap_y 5
+
+# Subtract file system buffers from used memory?
+no_buffers yes
+
+# set to yes if you want all text to be in uppercase
+uppercase none
+
+# number of cpu samples to average
+# set to 1 to disable averaging
+cpu_avg_samples 2
+
+# number of net samples to average
+# set to 1 to disable averaging
+net_avg_samples 4
+
+# Force UTF8? note that UTF8 support required XFT
+override_utf8_locale none
+
+# Add spaces to keep things from moving about?  This only affects certain objects.
+use_spacer none
+
+# Allow each port monitor to track at most this many connections (if 0 or not set, default is 256)
+#max_port_monitor_connections 256
+
+# Maximum number of special things, e.g. fonts, offsets, aligns, etc.
+#max_specials 512
+
+# Maximum size of buffer for user text, i.e. below TEXT line.
+#max_user_text 16384
+
+# variable is given either in format $variable or in ${variable}. Latter
+# allows characters right after the variable and must be used in network
+# stuff because of an argument
+
+# stuff after 'TEXT' will be formatted on screen
+# $stippled_hr
+# ${color lightgrey}CPU :${color #cc2222} $cpu% ${cpubar}
+# ${color #88aadd}MPD: ${alignc}$mpd_artist - $mpd_title
+# ${color #88aadd}$mpd_bar
+# ${color #88aadd}${alignc}$mpd_status
+# / $color${fs_used /}/${fs_size /} ${fs_bar /}
+# ${tail /var/log/Xorg.0.log 3 30}
+# $color Inbound: ${tcp_portmon 1 32767 count}  Outbound: ${tcp_portmon 32768 61000 count} ${alignr}ALL: ${tcp_portmon 1 65535 count}
+# ${color #999} Load:${color lightgrey} $loadavg
+# ${color #999}RAM: $color $memperc%  ${color lightgrey}($mem)
+# ${color #999}Swap:$color $swapperc%
+# ${color #999}Free:$color / ${fs_free_perc /}% ${color lightgrey}(${fs_free /})
+# ${color lightgrey} ($kernel on $machine)
+# ${color #999} Uptime:${color lightgrey} $uptime 
+
+top_cpu_separate true
+
+maximum_width 84
+TEXT
+${voffset 6}${color green}${time %a%d%b %H:%M}
+${if_existing /proc/acpi/battery/BAT1/}${color #00FFFF}${battery BAT1}${endif}
+${if_existing /proc/acpi/battery/BAT0/}${color #00FFFF}${battery BAT0}${endif}
+${color #999}${hr 2}
+${color red}${alignr}${cpu cpu1}%
+${cpugraph normal cpu1 770000 FF0000}
+${alignr}${cpu cpu2}%
+${cpugraph normal cpu2 770000 FF0000}
+${color #CC0000} $running_processes/$processes running
+${color #EE0000}-- Top CPU --
+${color #ee3300} ${top name 1} 
+${color #cc3300} ${top name 2}
+${color #aa2200} ${top name 3}
+${color #991100} ${top name 4}
+${color #EE00EE}-- Top Mem --
+${color #dd00dd} ${top_mem name 1}
+${color #bb00bb} ${top_mem name 2}
+${color #aa00aa} ${top_mem name 3}
+${color #EE00EE}RAM  $membar
+${color #FFCCFF}Swap $swapbar
+${color #999}${hr 2}
+${color #DDDD00}/ ${fs_bar /}
+${if_existing /proc/net/dev_snmp6/wlan0}${color #999}Down: ${color #FFFF00}${downspeedf wlan0} k/s
+${downspeedgraph wlan0 444400 FFFF00 32} 
+${color #999}Up: ${color #FFFF00}${upspeedf wlan0} k/s
+${upspeedgraph wlan0 444400 FFFF00 32}${else}${color #999}Down: ${color #CCCC00}${totaldown eth0}
+${alignr}${downspeedf eth0} k/s
+${downspeedgraph eth0 444400 CCCC00 32} 
+${color #999}Up: ${color #FFFF00}${totalup eth0}
+${alignr}${upspeedf eth0} k/s
+${upspeedgraph eth0 444400 FFFF00 32}${endif}
+${color #ddaa00}Outbound: ${color}${tcp_portmon 32768 61000 count} $color
+ ${tcp_portmon 32768 61000 rservice 0} ${tab 8} ${tcp_portmon 32768 61000 rhost 0}
+ ${tcp_portmon 32768 61000 rservice 1} ${tab 8} ${tcp_portmon 32768 61000 rhost 1}
+ ${tcp_portmon 32768 61000 rservice 2} ${tab 8} ${tcp_portmon 32768 61000 rhost 2}
+ ${tcp_portmon 32768 61000 rservice 3} ${tab 8} ${tcp_portmon 32768 61000 rhost 3}
+${color #ddaa00}Inbound: ${color}${tcp_portmon 1 32767 count} $color
+ ${tcp_portmon 1 32767 lservice 0} ${tab 8} ${tcp_portmon 1 32767 rhost 0}
+ ${tcp_portmon 1 32767 lservice 1} ${tab 8} ${tcp_portmon 1 32767 rhost 1}
+ ${tcp_portmon 1 32767 lservice 2} ${tab 8} ${tcp_portmon 1 32767 rhost 2}

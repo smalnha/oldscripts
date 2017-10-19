@@ -1,0 +1,174 @@
+#!/bin/bash 
+
+getFromArchive(){
+	for AFILE; do
+		if [ -f $AFILE ]; then
+			mv -iv $AFILE{,.orig}
+		fi
+		cp -ivr --archive $SYSARCHIVEDIR/$AFILE $AFILE
+	done
+}
+
+listAllUnapproved(){
+	DRYRUN=true
+	removeAllUnapproved
+}
+
+removeUnapproved(){
+	if [ ! -d /etc/$1 ] ; then
+		echo "Not a directory: /etc/$1"
+	fi
+
+	pushd /etc/$1/ >> /dev/null
+	if [ -f /etc/$1/approved ] ; then
+		mkdir not
+		for SCRIPT in [KS]* ; do
+			if ! grep -q $SCRIPT approved ; then
+				echo "Moving /etc/$1/$SCRIPT to /etc/$1/not/"
+				[ "$DRYRUN" ] || sudo mv $SCRIPT not/
+			fi
+		done
+#		for APPROVED in `cat /etc/$1/approved` ; do
+#			mv /etc/$1/not/$APPROVED /etc/$1/
+#		done
+	else 
+		echo "Creating /etc/$1/approved using current configuration."
+		command ls [KS]* > approved
+	fi
+	popd >> /dev/null
+}
+
+removeAllUnapproved(){
+	sudo echo "Checking root priviledges."
+	for RCDIR in rc.boot rc0.d rc1.d rc2.d rc3.d rc4.d rc5.d rc6.d rcS.d; do
+		removeUnapproved $RCDIR
+	done
+}
+
+# --------------------  the following is for inserting into /etc/init.d/* files
+
+function removeFromFiles(){
+	for scriptFile in $* ; do
+		if [ -f $scriptFile ] ; then
+			echo "Checking $scriptFile"
+			if grep -q '^\[ $DOCIT \]' $scriptFile ; then
+				sudo cp $scriptFile{,.orig}
+				sed -i '/^\[ \$DOCIT \]/,/^\$DOCIT/d' $scriptFile
+			else
+				echo "Nothing to remove"
+			fi
+		else
+			echo "Not found: $scriptFile"
+		fi
+	done
+}
+
+function insertIntoFiles(){
+	for scriptFile in $* ; do
+		case $scriptFile in
+			docit.sh | autosource )
+				echo "Skipping $scriptFile"
+				;;
+			*.orig )
+				: echo "Ignoring $scriptFile"
+				;;
+			*)
+				if [ -f $scriptFile ] ; then
+					echo "Checking $scriptFile"
+					if ! grep -q "^\[ \$DOCIT \]" $scriptFile ; then
+						cp $scriptFile{,.orig}
+						sed -i "2i \[ \$DOCIT \] || source /etc/init.d/docit.sh" $scriptFile 
+						sed -i "3i \$DOCIT \"$scriptFile: \$0 \$*\" " $scriptFile
+						#echo "$scriptFile ----------"
+						#head $scriptFile
+					fi
+				else
+					echo "Not found: $scriptFile"
+				fi
+				;;
+		esac
+	done
+}
+
+insertIntoExtraFiles(){
+	insertIntoFiles \
+/etc/rcS.d/S00-rcS.d \
+/etc/X11/Xsession \
+/etc/X11/Xsession.d/* \
+
+}
+
+
+otherServices(){
+	# getFromArchive /etc/delay-services
+	update-rc.d delay-services start 19 5 .
+	mv -iv /etc/rc5.d/S{99,18}kdm
+
+	ln -s /etc/init.d/askrunlevel /etc/rc.boot/askrunlevel
+
+	# document and time the startup, reboot, and halt scripts
+	cd /etc/init.d
+	source docit.sh
+	insertIntoDefaultFiles
+}
+
+xinetService(){
+	echo "remove services handled by xinetd"
+	for xinetServices in ssh samba; do
+		update-rc.d -f $xinetServices remove
+	done
+}
+
+setupCups(){
+#  Printer: "printer config" in Knoppix menu
+	update-rc.d cupsys start 90 5 .  # http://localhost:631 to config printer
+	# can use lp and lpr to print; lpoptions and lphelp
+	#mv /usr/bin/lpr /usr/bin/lpr-orig; 	ln -s /usr/bin/kprinter /usr/bin/lpr
+# For sharing printer with Windows: at least SAMBA 2.0.6 to work with CUPS
+# http://www.cups.org/sam.html#8_8
+#	load printers = yes	#to automatically load your printer
+#	printing = cups
+#	printcap name = cups
+# define a raw printer on CUPS to allow Windows to print directly without filters
+	lpadmin -p rawWithoutPPD -D "use your windows print driver" -E -v usb:/dev/usb/lp0
+	# may be able to use "usb://HP/OfficeJet V Series?serial=MY14NA20PRWN"
+	#	(just don't use the "-m" or "-P" options").
+	# getFromArchive /etc/cups/cupsd.conf
+
+	echo "if you want vietnamese input method, install unikey, or try yudit"
+	# download the source to see the manual in english
+	echo "You must have en_US.UTF-8 or vi_VN.UTF-8 and set LANG"
+	echo "edit .unikeyrc to use CommitMethod = Forward" 
+
+	echo "# logout and restart X (Ctrl-Alt-Backspace)"
+	echo "# and log in as $NEWUSERNAME"
+
+#HOME
+# HP officejet v40 driver (needed for scanner)
+	apt-get install hpoj
+	update-rc.d ptal-init start 89 5 .	# before cupsys
+	ln -s /etc/init.d/ptal-init /etc/rc5.d/K91ptal-init
+# old printer driver won't work, add a new printer found at bottom of local printer list.
+	# To use xscanimage and xsane in gimp, which is particularly convenient:
+	# cd /usr/lib/gimp/1.2/plug-ins
+	# ln -sf /usr/local/bin/xscanimage .
+	# ln -sf /usr/local/bin/xsane .
+}
+
+CHOICES="$CHOICES setupInternetConnectionSharing"
+setupInternetConnectionSharing(){
+	echo "# Internet-connection sharing. "
+	update-rc.d icsharing start 90 5 .	#add to runlevel 5
+}
+
+netselect(){
+	echo -e "\n"
+#	# http://www.debian.org/doc/manuals/apt-howto/ch-basico.en.html#s-dpkg-scanpackages
+#	apt-get install netselect
+#	netselect-apt
+#	netselect `cat possibleSources`
+# 	# http://www.debian.org/mirror/mirrors_full, http://www.apt-get.org/main/
+
+}
+
+

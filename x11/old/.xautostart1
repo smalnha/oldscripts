@@ -1,0 +1,39 @@
+#!/bin/bash
+
+. .runSingleton.src
+
+case "$HOSTNAME" in
+	blackhat )
+		# crypt.sh Desktop &
+	;;
+	dell6k)
+		#runSingleton "nm-applet --sm-disable"
+	;;
+esac
+
+
+# if [ -x "$HOME/bin/direct/nailer" ]; then
+#    runSingleton -c "nailer" "$HOME/bin/direct/nailer --dock bottom"  # fast startup - no need to delay
+# elif [ -x "$HOME/bin/direct/tablaunch" ]; then
+#    runSingleton -c "tablaunch" "$HOME/bin/direct/tablaunch"  # fast startup - no need to delay
+# elif which idesk &> /dev/null; then
+#    runSingleton "idesk"
+# fi
+
+# automounter and event listener
+which ivman-launch > /dev/null && runSingleton -c "ivman" "ivman-launch"  
+# too verbose: --exit-with-session fluxbox"
+# I'll kill it in .xautostop
+
+# load audio volume settings
+which aumix > /dev/null && runSingleton -c "aumix" "nice -n 19 aumix -L"
+
+# appendToQueue2 \"bbkeys -w -t\"
+
+# appendToQueue2 \"xbindkeys\"
+
+#appendToQueue -c \"checkGMail\" \"nice -n 19 xterm -name "gmail" -title "gmail" -e $HOME/bin/mail.sh startGMailLoop\"
+
+# must be the last line:
+xautolock -exit
+

@@ -1,0 +1,3712 @@
+#!/bin/bash
+#    dvd-slideshow
+#    Copyright 2003 Scott Dylewski  <scott at dylewski.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+name='dvd-slideshow'
+version='0.7.1'
+
+echo "[dvd-slideshow]            dvd-slideshow $version"
+echo "[dvd-slideshow]            Licensed under the GNU GPL"
+echo "[dvd-slideshow]            Copyright 2003-2005 by Scott Dylewski"
+echo "[dvd-slideshow]            "
+
+changes ()
+{
+echo 'Changes:
+0.7.1	
+	Added log file output to dvd-slideshow.log
+	Updated documentation and examples.
+	Background color can now take a #RRGGBB value.
+	Nicer progress indicator.
+	AC3 audio is now the default.  Pass -mp2 to force MP2 audio.
+	Autocrop works on background images now also.
+	Added code to check for all temporary fade_xxxx.ppm images
+	before proceeding to encode mpeg video.  
+	Fadein or crossfade to a scroll effect works correctly now.
+0.7.0	
+	Default variables can be set in a ${HOME}/.dvd-slideshowrc file
+	Default variables can be set in the input .txt file
+	Crossfade and fadein to kenburns effect correctly fades
+	 to the first frame geometry instead of the whole image.
+	New keywords for the start and end points in kenburns effect:
+	 topleft/middle/middleright etc.  See docs for details.
+	New keywords for the crop function also.
+	9999 audio files possible now. Used to be a limit of 9
+	Fixed bug when fading in to a cropped image.
+	Removed -R 2 and -c options in mpeg2enc because
+	 some people had problems.
+	Fixed subtitle timing bug, so now the subtitles appear
+	 and disappear closer to the correct time.
+	Changed encoded audio bitrate from 224kb/s to 128kb/s
+	Works with toolame 0.2m beta and 0.2L now
+        Got rid of calls to NetPBM functions, so it is no longer required...
+	Changed "wc -m" call to "wc --chars" for better compatibility.
+	Fixed syntax so spaces should be allowed in input files now.
+	Changed "seq 2 1" to "seq 2 -1 1" for better compatibility
+	Added option to "autocrop" images (-c) that are close to the
+		output aspect ratio, but not quite.
+	Title syntax changed... (see documentation)
+	Fadein/crossfade to a title or background slide works now.
+	Fadein/fadeout/crossfade works when previous/next slide is not
+	 actually an image/title/background. The next real slide will
+	 be used instead.
+	Fixed bug in Low quality mode (-L) (extracopies bug)
+	Fixed bug with subtitles with new versions of imagemagick.
+	White can be used a a background keyword for white backgrounds.
+
+0.6.0	
+	Fixed major bug/error when generating long slideshows. 
+		Now all video gets piped in YUV fomat through mpeg2enc
+		in one single block. (fix by Mike Beller)
+	Added option to generate AC3 audio files (requires ffmpeg)
+	Fixed title slide when using -L (low quality mode)	
+	Allow for slide durations to be specified in hundreths of a second: 5.23
+	Reports total audio and video lengths at the beginning of the code.
+	Fixed bug when using subtitles. (no subtitles were generated)
+	Changed output files to be .vob extension instead of .mpg	
+	Better font searching (thanks Jim Crumley)
+	Use backslash to escape a colon in subtitles (thanks Jim Crumley)
+	Allow avi input files.  pre-alpha support.  (thanks Jim Crumley)
+0.5.4	
+	Added option to re-define background image from text file input.
+	Code cleanup (slightly)
+	Added support for two audio tracks.  
+	Added audio effects:  fadein/fadeout	
+	Default command-line audio fadein/fadeout time is 3 seconds.
+0.5.2	
+	Fixed bug in musictitle Title info parsing.
+	Checks to make sure a slidshow name is passed.
+	Added low-quality mode (-L) for testing.  Speeds things up about 4x.
+	Reduced verbosity.
+	Checks for required fonts. Subtitles look much better now.
+	Word-wraps long subtitle lines into two lines.
+0.5.0	
+	Added KenBurns effect!  See docs for usage.
+	Added scroll effect!  See docs for usage.
+	Added crop effect.  See docs for usage.
+	Audio can be started and stoped for multiple files within
+		the text file.  See docs for usage.
+	Added "musictitle" option for displaying audio info.
+	You can now comment out lines in the textfile by using the # character.
+	Also ignores blank lines in textfile.
+	Fades can now have up to 9999 frames.
+	Total slides can now be 9999.  You guys are crazy.
+	fixed small bug when no chapters are specified.
+	Chapter markers are now rounded up to the next full second due to
+		a bug in some versions of dvdauthor.
+	Only checks for oggdec or lame if you pass an ogg or mp3 file.
+	Changed syntax of command line input for files and audio.
+	Passing images on the command line is no longer "public". 
+		Use the text file in put instead.
+	Fixed audio problem with some mp3 files getting pops in them.
+0.4.8   
+	Changed audio to process raw (headerless) audio files before 
+		joining them.
+        Fixed bug when passing multiple audio files (again).
+        Fixed audio fadein/fadeout time to 1 second
+        Fixed bug in audio where it plays to fast when burned on dvd.
+        Checks to make sure audio files exist before processing.
+0.4.6	Fixed bug when passing multiple audio files. (thanks Scott Merrill)
+	Removed -t option from toolame command for better support for old versions.
+0.4.4	Only writes chapter markers when there is a picture or title
+	First chapter marker is now fixed at time 0
+	Max number of chapter markers is now 99 (thanks Jens Gecius)
+	Fixed bug when checking for toolame (thanks Jens Gecius)
+	Added "crossfade" option!
+	Will use mpeg3cat from libmpeg3 to join mpegs if available.
+	Small fix to allow semicolons in subtitles (thanks Jim Crumley)
+	Added -s option to mpeg2enc calls for (maybe?) better compatibility.
+0.4.2	Current working directory will be used if -o not specified.
+	Allow "background" keyword in text file to insert background.
+	Make sure all ImageMagick calls have -depth 8 to make ppmtoy4m happy.
+	No font is specified in ImageMagick calls, so it should use the default.
+	Changed default menu to a steelblue gradient when no image is passed.
+0.4	Fixed bug when no background specified (again).
+	Added error checking to make sure image files exist.
+	Ogg audio format supported (you must have oggdec).
+	Uses toolame for mp2 audio encoding when available.
+	Audio timing improved.
+	Fixed bug when double-quotes were in subtitle.
+	Added black, fadein, and fadeout options in txtfile!
+	-p  (PAL format option) added. Not tested, but should work.
+0.3	Fixed error when no background specified.  Now default is black
+	Added checking for required programs before running.
+0.2	Initial release'
+}
+
+help ()
+{
+echo "`basename $0` Version $version "
+echo 'http://freshmeat.net/dvdslideshow'
+echo 'Copyright 2003-2004 Scott Dylewski <scott at dylewski.com>'
+echo 	 
+echo 'Description: 
+	Creates a dvd-compatible mpeg2 file from a bunch of jpegs.
+	You can add music if you want also. Supports several effects
+	like fadein/fadeout/crossfade/crop/kenburns.  
+
+Usage:
+ dvd-slideshow -o <output_directory> [-b <background_jpeg>] 
+  [-n <slideshow_name>] [-a <audio_file1> <audio_file2> ... <audio_fileN>] 
+  -f input_file.txt [-p] [-L] [-mp2]
+	
+Options: 
+ -o <outupt directory>
+	  Directory where the final mpeg and dvdauthor files
+	  will be written
+ 		
+ -b <background jpeg>
+	  Image to use for the background of the slideshow.
+	  All of the pictures will be
+	  overlaid on top of this background image. If no file 
+	  is specified, black will be used for the slideshow
+	  and a blue gradient for the title slide.
+	  
+ -n slideshow_name
+	  This will be printed at the top of the slideshow
+	  title slide, if it exists.  The program also uses this
+	  string as the filename base for the output files
+	  so you can distinguish it from other slideshows
+	  that you can send to the same output directory.
+
+ -a <audio file>
+          Audio file to play in background during the slideshow.
+          It will be faded out at the end.  Supports mp3, ogg, or wav
+          formats at this point.  Multiple files will be joined.
+	  See also the more flexible text file input method.
+	  To pass multiple files, use the -a switch again.
+
+ -mp2
+	Use MP2 audio instead of AC3.
+	Default audio format is now AC3 because it seems to be more
+	compatible with the DVD hardware players.
+
+ -p 
+	  Use PAL output video format instead of NTSC
+
+ -L 
+	  Render a low-quality video suitable for debugging.
+	  This sets the resolution to 1/2 of full resolution and
+	  decreases the quality of fades/transitions.
+
+ -r 	Autocrop horizontal images to fill the full size of the screen.
+ 	( alpha version )
+
+ -f input_file.txt
+          File to specify all the parameters and order easily
+          for bigger slideshows. It uses the ':' character as a 
+	  separator for the fields:
+          [image.jpg|keyword]:duration:subtitle:effect:effect_params
+          with each line being separate.  File options
+          will override the ones passed on the command line.
+	  NOTE: the effect parameters are separated by a semicolon ;
+	  instead of a colon :
+	  You can escape a colon with a backslash in subtitle text.
+	  Duration can be specified in seconds with
+	  up to two decimal points, like 5.58 seconds.
+
+	  Keywords:
+	    title:duration:Upper_Title:Lower_Title
+	    	makes a title slide.  Upper and lower titles are
+		optional; if one is missing, only the other will
+		be displayed.  White bands are underlayed behind
+		the text.
+	    musictitle:duration:subtitle:Title;Artist;Album
+	   	makes a black frame with the song info 
+		printed in the bottom left corner.
+	    black:duration:subtitle  (depreciated)
+	    	Makes a blank black slide. Use the "background"
+		keyword instead.
+	    background:duration:subtitle:image 
+	    	makes a slide with the current background 
+		or it resets the current background image to a new one:
+		"background:2:"  will display the current background
+		for 2 seconds. 
+		"background:2::image.jpg"  will set the background to
+		image.jpg and also display it for 2 seconds.
+		"background:0::image.jpg"  will set the background to 
+		image.jpg, but will not use it until the next picture. 
+		"black" or "white" can be used instead of an image 
+		name to display a black or white background.
+		You can also use a hex RGB code as the background color.
+	    fadein:duration:subtitle
+	    	fades in to the next slide
+	    fadeout:duration:subtitle
+	    	fades out to the background
+	    crossfade:duration:subtitle
+	    	fades from one picture to the next.
+	    
+	  Effects:
+	    Effects are only used with images, not keywords.
+	    In the following effects, x0,y0 represents the
+	    top left corner of a defined box, and x1,y1 is
+	    the bottom right corner. 
+	    NOTE: the effect parameters are separated by a
+	    semicolon ; instead of a colon :
+            crop:
+	    	image.jpg:dur:sub:crop:x0,y0;x1,y1
+		Crops the image about the coordinates specified.
+		Full box description:
+	    	  x0,y0;x1,y1
+		  Specifies the top-left(0) and bottom-right(1) points.
+		Keyword description:
+		  frame_size;frame_location
+		  where frame_size indicates the fraction of the final 
+		  dvd window width/height, and frame_location refers
+		  to the CENTER POINT of the picture,
+		  and can be any of the following keywords:
+		 	topleft		top		topright
+			left		middle		right
+			bottomleft	bottom		bottomright
+		   or
+		 	x%,y%
+			where % is a percentage of the window width,height
+			starting from the top left corner of the dvd window.
+		   or
+		 	imagewidth | imageheight
+			where the image width or height will be scaled to 
+			fill the full width or height of the dvd screen.
+		Crop examples:
+	    	image.jpg:dur:sub:crop:651,390;1134,759
+		image.jpg:dur:sub:crop:30%;60%,60%
+		image.jpg:dur:sub:crop:50%;topleft
+		image.jpg:dur:sub:crop:imageheight;left
+	    kenburns:
+	    	image.jpg:dur:sub:kenburns:start_box;end_box
+		The kenburns effect will crop/zoom from the start
+		to the end box.
+	    	Where now we have start and end boxes, defined in
+		the same way as in the "crop" function, but now
+		we have two boxes defined.
+		Full box description:
+	    	  xs0,ys0;xs1,ys1;xe0,ye0;xe1,ye1
+		  Specifies the top-left(0) and bottom-right(1) points.
+		Keyword description:
+		  start 0%-100%;start_location;end 0%-100%;end_location
+		Kenburns examples:
+	    	image.jpg:dur:sub:kenburns:651,390;1134,759;372,330;1365,1089
+		image.jpg:dur:sub:kenburns:30%;60%,60%;75%;40%,50%
+		image.jpg:dur:sub:kenburns:50%;topleft;50%;bottomright
+		image.jpg:dur:sub:kenburns:100%;left;0,0;720,480
+		image.jpg:dur:sub:kenburns:100%;left;imageheight;left
+	    scroll:
+	    	image.jpg:dur:sub:scroll:[left|right|up|down]
+		This is most useful for displaying panorama-style
+		pictures that are much wider than they are tall.
+		This will automatically resize the picture so that
+		the image height is equal to the video display 
+		height (480) before scrolling (or conversely for tall
+		images).
+
+	    The subtitle field is optional, but if you are passing
+	    effects after the subtitle field, be sure to include 
+	    all the colons :: in order for the parser to get the
+	    correct info.
+
+	    When passing a picture, you can optionally use the
+	    keyword "audio" instead of the integer duration in 
+	    seconds.  What this does is force the duration of
+	    that image to be the length of the previous audio 
+	    track.  This is useful for making a music video dvd.
+
+	  Audio:
+	    Audio tracks can be inter-mixed with the video.  If 
+	    an audio track is placed between two different images,
+	    that audio track will begin playing at the start of the
+	    second image.  When placing audio, use the syntax:
+
+            audiofile:track:effect1:effect1_params:effect2:effect2_params
+
+	    The audiofile can be a .ogg, .mp3, or .wav file.
+	    Track is the resulting dvd audio track.
+	    Effects are audio effects where
+	    you can specify things like fadein/fadeout
+	    for the audio.  Example:
+            audiofile.ogg:1:fadein:3:fadeout:2
+	
+	Configuration file and variables:
+	  You can configure some of the variables and settings
+	  that control dvd-slideshow through keywords in the input
+	  .txt file or through a ~/.dvd-slideshowrc file.  The heirarchy
+	  is as follows: 
+	  program defaults --> ~/.dvd-slideshowrc --> input file variables
+	  So the input file will over-ride your personal settings, etc.
+	  The following variable are supported (with this syntax):
+	   
+	  debug=1       # 0 (low) to 3 (lots of info)
+	  pal=0  	# 0=ntsc 1=pal
+	  ac3=1         # 0=mp2 audio 1=ac3 audio
+	  copy=0        # add copies of original images to the output directory
+	  autocrop=1    # autocrop images to fill full screen
+
+	  font_dir="/usr/share/fonts"
+	  font1='n019004l.pfb' # helvetica bold URW fonts
+	  font2='helb____.ttf' # helvetica bold truetype
+
+	  ## font sizes:
+	  subtitle_font_size=24
+	  title1_font_size=48
+	  title2_font_size=36
+
+	  ## top title:
+	  title1_bar_height=125  # 0 for no 50% white behind text
+	  title1_text_location_x=80
+	  title1_text_location_y=50
+
+	  # bottom title:
+	  title2_bar_location_y=324 # relative to top of image
+	  title2_bar_height=55  # 0 for no 50% white behind text
+	  title2_text_location_x=0
+	  title2_text_location_y=325
+
+	
+ -h or -help 
+   Prints this help. 
+
+ -v or -version 
+   Prints dvd-slideshow version number. 
+
+ -c      (pre-alpha do not use!)
+	  Add chapter selection sub-menu. (when used with dvd-menu)
+
+ -B     (pre-alpha do not use!)
+	Add browsable slideshow in sub-menu. (when used with dvd-menu)
+	When browsing through the pictures, there will be no audio. 
+	99 slides maximum.
+
+ -M 	(not working.  do not use)
+	  Render a medium-quality video.
+
+ -border N	(not implemented yet!)
+	Add a border of N pixels around the image for better display
+	on TV screens which always seem to crop some of the picture.'
+	echo '  '
+}
+
+if [ $# -lt 1 ]; then
+	echo "[dvd-slideshow] ERROR: Too few arguments"
+	help
+	exit 1
+fi
+
+
+###################################################################
+# Default variables
+# order of perference:  
+# program defaults --> ~.dvd-slideshowrc --> .txtfile settings
+
+## setup program default variables:
+## user configurable:
+debug=0 # 0-2
+pal=0  
+copy=0
+low_quality=0
+medium_quality=0
+autocrop=0
+ac3=1
+border=0  # not implemented yet
+font_dir="/usr/share/fonts/"
+font1='n019004l.pfb' # helvetica bold URW fonts
+font2='helb____.ttf' # helvetica bold truetype
+## font sizes:
+subtitle_font_size=24
+title1_font_size=48
+title2_font_size=36
+## top title:
+title1_bar_height=125  # 0 for no 50% white behind text
+title1_text_location_x=80
+title1_text_location_y=50
+# bottom title:
+title2_bar_location_y=324 # relative to top of image
+title2_bar_height=55  # 0 for no 50% white behind text
+title2_text_location_x=0
+title2_text_location_y=325
+
+# soon to be user configurable:
+logfile='dvd-slideshow.log'
+
+##################################################################################
+## not user configurable:
+verbosity=0  # for mpeg2enc and such
+slideshow_name=""
+titletext=""
+i_audio=0
+j_audio=0
+write_chap=0
+subtitle_number=1
+n=0
+m=0
+new_vob=0
+browse_num=0
+submenu=0
+chapmenu=0
+browsable=0
+# these vars assist 'yuvcat' mode
+yuvcat=1                    # tells if we're in yuvcat mode
+yuvfifo=/tmp/dvdss-pipe-$$   # pipe to mpeg2enc process
+yuvpid=0                    # pid of child mpeg2enc process
+yuvfirstfile=1              # tells when to strip yuv headers
+mpegid=0
+
+## read user rc file, if it exists:
+if [ -f "${HOME}/.dvd-slideshowrc" ] ; then
+	echo "[dvd-slideshow] Reading default variables in ${HOME}/.dvd-slideshowrc"
+        . "${HOME}/.dvd-slideshowrc"  # insecure?  maybe do a loop...
+fi
+
+## command-line settings:
+for arg
+do
+	case "$arg" in
+	-i) shift ; image[$n]="$1"; let n=$n+1; shift;;
+	-o) shift; outdir="$1"; shift ;;
+	-b) shift; bgfile="$1"; shift ;;
+	-n) shift; slideshow_name="$1"; shift ;;
+	-t) shift; time_per_picture="$1"; shift ;;  ## in tenths of seconds?
+#	-T) shift; titletext="$1"; shift ;;   ## need to specify this in the file
+	-f) shift; input_txtfile="$1"; shift
+                if [ ! -f "$input_txtfile" ] ; then
+                echo "[dvd-slideshow] ERROR: Input file $input_txtfile does not exist."
+                exit 1
+                fi ;;
+	-p) shift; pal=1 ;;  # use pal format
+	-r) shift; autocrop=1 ;;  # autocrop horizontal images
+#	-border) shift; border="$1" ;;  # add border around image
+	-C) shift; copy=1 ;;  # make backup copy of all pictures passed. 
+#	-s) shift; submenu=1 ;;  # create a sub-menu with options (not working yet)
+#	-c) shift; chapmenu=1 ; submenu=1 ;;  # create a chapter select sub-menu (implies submenu)
+#	-B) shift; browsable=1 ; submenu=1 ;;  # create a browsable slideshow (not working)
+	-L) shift; low_quality=1 ;;  # use low-quality mode
+	-mp2) shift; ac3=0 ;;  # use mp2 audio
+	-ac3) shift; ac3=1 ;;  # use ac3 audio
+	-V) shift; debug="$1"; shift ;;
+	-a) shift; 
+                # make sure the file exists and is the correct type!
+                suffix=`echo "$1" | awk -F. '{print tolower($NF)}'`
+                if [ "$suffix" == 'ogg' ] || [ "$suffix" == 'mp3' ] || [ "$suffix" == 'wav' ] ; then
+                	if [ ! -f "$1" ] ; then
+                       	 echo "[dvd-slideshow] ERROR: File $1 does not exist"
+                         exit 1
+                        fi
+                        audio[$m]="$1"
+                        let m=$m+1
+                        shift;
+                else
+                       	 echo "[dvd-slideshow] ERROR: File $1 is not an ogg, mp3, or wav."
+                         exit 1
+                fi ;;
+	-h) help ; exit 0 ; shift ;;
+	-?) help ; exit 0 ; shift ;;
+	-help) help ; exit 0 ; shift ;;
+	-version) echo "$version" ; exit 0 ; shift ;;
+	esac
+done
+
+##################################################################
+### no more user input after this line?
+
+if [ -z "$input_txtfile" ] ; then
+	input_txtfile="$1"
+fi
+if [ ! -f "$input_txtfile" ] ; then
+	echo "[dvd-slideshow] ERROR: Input file $input_txtfile does not exist."
+	exit 1
+fi
+
+# make sure a slideshow name was given:
+if [ -z "$slideshow_name" ] ; then
+	echo "[dvd-slideshow] ERROR:  You must specify a slideshow name with -n <slideshow name>"
+	exit 1
+fi
+
+myecho ()
+{
+	## use this version of echo to write to screen and to the logfile:
+	echo "$*"
+	echo "$*" >> "$outdir/$logfile"
+}
+
+myechon ()
+{
+	## use this version of echo to write to screen and to the logfile:
+	echo -n "$*"
+	echo -n "$*" >> "$outdir/$logfile"
+}
+
+
+## check_rm checks to see if the file exists before it's deleted:
+check_rm ()
+{
+	if [ -f $1 ] ; then
+		rm $1
+	fi
+}
+
+cleanup ()
+{
+	## clean up temporary files
+	echo ""
+	echo "[dvd-slideshow] cleanup..."
+	check_rm temp_slideshow_image.ppm ; check_rm temp.ppm
+	check_rm temp_slideshow_image_scaled.ppm
+	check_rm "$outdir/slideshow_background.ppm"
+	check_rm "$outdir/slideshow_background.mpc"
+	check_rm "$outdir/slideshow_background.cache"
+	check_rm "$outdir/title_background.png"
+#	check_rm "$outdir/${slideshow_name}.chap"
+	check_rm "$outdir/${slideshow_name}".spumux
+#	check_rm "$outdir/"
+	check_rm "$outdir/trash.txt"
+	check_rm "$outdir/browse.spumux"
+	check_rm "$outdir/subtitle.png"
+	check_rm "$outdir/dvd_title.png"; check_rm "$outdir/dvd_title_2.png"
+	check_rm "$outdir/video.mpg"
+	check_rm "$outdir/video_0.mpg"
+	check_rm "$outdir/audio1.mp2"; check_rm "$outdir/audio2.mp2"
+	check_rm "$outdir/audio1.wav"; check_rm "$outdir/audio2.wav"
+	check_rm "$outdir/audio.raw"; check_rm "$outdir/audio_new.raw"
+	check_rm "$outdir/box.png"
+	check_rm "$outdir/up_arrow.png"; check_rm "$outdir/left_arrow.png"; check_rm "$outdir/right_arrow.png"
+	check_rm "$outdir/up_arrow_mask.png"; check_rm "$outdir/left_arrow_mask.png"; check_rm "$outdir/right_arrow_mask.png"
+	check_rm "$outdir/menu_ur.png"; check_rm "$outdir/menu_lur.png"; check_rm "$outdir/menu_lu.png"
+	check_rm "$outdir/menu_mask_ur.png"; check_rm "$outdir/menu_mask_lur.png"; check_rm "$outdir/menu_mask_lu.png"
+	check_rm "$outdir/temp.png"; check_rm "$outdir/temp2.png"
+	check_rm "$outdir/audio1.ac3"; check_rm "$outdir/audio2.ac3"
+	check_rm "$outdir/temp_slideshow_image.png"
+	check_rm "$outdir/temp_slideshow_image.mpc"
+	check_rm "$outdir/temp_slideshow_image.cache"
+	check_rm "$outdir/temp_slideshow_image_scaled.mpc"
+	check_rm "$outdir/temp_slideshow_image_scaled.cache"
+	check_rm "$outdir/title.ppm"
+	check_rm "$outdir"/kenburns_????.mpc 
+	check_rm "$outdir"/kenburns_????.cache
+	k=0
+	dk=0
+	for file in "${image[@]}"; do
+ 		[ $k -lt 1000 ] && dk="0$k" || dk=$k
+ 		[ $k -lt 100 ] && dk="00$k" || dk=$dk
+ 		[ $k -lt 10 ] && dk="000$k" || dk=$dk
+#		echo "k=$k  dk=$dk"
+		check_rm "$outdir/audio1_$dk.wav"
+		check_rm "$outdir/audio1_$dk.raw"
+		check_rm "$outdir/audio2_$dk.wav"
+		check_rm "$outdir/audio2_$dk.raw"
+		check_rm "$outdir/slide_$k.ppm"
+		check_rm "$outdir/slide_$k"_thumb.ppm
+		check_rm "$outdir/slide_nav_$dk".ppm
+		check_rm "$outdir/slide_$dk.mpg"
+		check_rm "$outdir/subtitle_$k.png"
+		check_rm "$outdir/slide_$k.mpc"
+		check_rm "$outdir/slide_$k.cache"
+		let k=$k+1
+	done
+        if [ "$yuvcat" -eq 1 ]; then
+                check_rm "$yuvfifo"
+                if [ "$yuvpid" -ne 0 ]; then
+                        kill -TERM $yuvpid
+                fi
+        fi
+
+}
+
+forcequit () ## function gets run when we have some sort of forcequit...
+{
+	## clean up temporary files
+	cleanup
+	exit
+}
+
+trap 'forcequit' INT
+trap 'forcequit' KILL
+trap 'forcequit' TERM
+
+## check for the necessary programs:
+checkforprog ()
+{
+        it=`which $1`
+        if [ -z "$it" ] ; then
+                echo "[dvd-slideshow] ERROR:  $1 not found! "
+                echo "[dvd-slideshow] Check the dependencies and make sure everything is installed."
+                exit 1
+        fi
+}
+
+hms ()
+{
+	## pass a number in hundreths of seconds and get back a 
+	## time code of the form HR:MM:SS:HU
+	if [ -z "$1" ] ; then
+		echo ''
+	else
+		hours=$(( $1 / 360000 ))
+		it=$(( $1 - $hours * 360000 ))
+		minutes=$(( $it / 6000 ))
+		it=$(( $1 - $minutes * 6000 ))
+		seconds=$(( $it / 100 ))
+		hundreths=$(( $it - $seconds * 100 ))
+		it="$hours:$minutes:$seconds.$hundreths"
+		echo "${it}"
+	fi
+}
+
+hms2seconds ()
+{
+	## pass a number in H:MM:SS:xxx and get back number of seconds
+	if [ -z "$1" ] ; then
+		echo ''
+	else
+		hours=`echo $1 | cut -d: -f1`
+		minutes=`echo $1 | cut -d: -f2`
+		seconds=`echo $1 | cut -d: -f3 | cut -d. -f1`
+		fraction=`echo $1 | cut -d: -f3 | cut -d. -f2`
+		characters=`echo "$fraction" | wc --chars`
+		if [ "$characters" -eq 1 ] ; then ## no decimal was specified
+			duration_ms="0"
+		elif [ "$characters" -eq 2 ] ; then ## 1 decimal was specified
+			duration_ms="$duration_ms"00
+		elif [ "$characters" -eq 3 ] ; then ## 2 decimal was specified
+			duration_ms="$duration_ms"0
+		elif [ "$characters" -eq 4 ] ; then ## 3 decimal was specified. 
+			duration_ms="$fraction"
+		else
+			echo "[dvd-slideshow] ERROR: Duration string $1 is bad."
+			echo "[dvd-slideshow] 	Probably too many decimal places.  "
+			echo '[dvd-slideshow]   There is no point specifying 0.0001 seconds."'
+			cleanup; exit 1
+		fi
+		it=$(( $seconds + $minutes * 60 + $hours * 3600 ))
+		## round up thousandths?
+		echo "$it"."$duration_ms"
+	fi
+}
+
+
+max ()
+{
+	## get the max of the arguments
+	last_number=0
+	for number
+	do
+		if [ "$number" -gt "$last_number" ] ; then
+			last_number="$number"
+		fi
+	done
+	echo "$last_number"
+}
+
+min ()
+{
+	## get the min of the arguments
+	last_number=10000000000000000
+	for number
+	do
+		if [ "$number" -lt "$last_number" ] ; then
+			last_number="$number"
+		fi
+	done
+	echo "$last_number"
+}
+
+addzeros ()
+{
+			[ $1 -lt 1000 ] && dj2="0$1" || dj2=$1
+			[ $1 -lt 100 ] && dj2="00$1" || dj2=$dj2
+			[ $1 -lt 10 ] && dj2="000$1" || dj2=$dj2
+			echo "$dj2"
+}
+
+# strip every yuv file except the first
+yuvstrip ()
+{
+       read junk
+       cat
+       return 0
+}
+
+encode ()
+{
+if [ "$yuvcat" -eq 0 ]; then
+       if [ "$pal" -eq 1 ] ; then
+               ppmtoy4m -v $verbosity -n "$frames" -r -F 25:1 -A 59:54 -I p "$outdir/slide_$i.ppm"\
+                | mpeg2enc -v $verbosity -a 2 -q 8 -s -M 3 -f 8 -b 6000 -I 0 -o "$outdir/slide_$di.mpg"
+       else
+               ppmtoy4m -v $verbosity -n "$frames" -r -F 30000:1001 -A 10:11 -I p "$outdir/slide_$i.ppm" \
+               | mpeg2enc -v $verbosity -a 2 -q 8 -s -M 3 -f 8 -b 6000 -I 0 -o "$outdir/slide_$di.mpg"
+       fi
+else  #yuvcat mode, so just write the yuv out to fd 55, which is the mpeg2enc process
+       if [ "$yuvfirstfile" -eq 1 ]; then
+               yuvstrip=cat
+               yuvfirstfile=0
+       else
+               yuvstrip=yuvstrip
+       fi
+       if [ "$pal" -eq 1 ] ; then
+               ppmtoy4m -v $verbosity -n "$frames" -r -F 25:1 -A 59:54 -I p "$outdir/slide_$i.ppm" | $yuvstrip >&55
+       else
+               ppmtoy4m -v $verbosity -n "$frames" -r -F 30000:1001 -A 10:11 -I p "$outdir/slide_$i.ppm" | $yuvstrip >&55
+       fi
+fi
+}
+
+encode_menu ()
+{
+if [ "$pal" -eq 1 ] ; then
+        ppmtoy4m -v 0 -n 1 -r -F 25:1 -A 59:54 -I p "$1" | \
+	mpeg2enc -q 4 -4 2 -2 1 -v 0 -a 2 -M 3 -f 8 -o "$outdir/menu.mpg"
+else
+        ppmtoy4m -v 0 -n 1 -r -F 30000:1001 -A 10:11 -I p "$1" | \
+	mpeg2enc -q 4 -4 2 -2 1 -v 0 -a 2 -M 3 -f 8 -o "$outdir/menu.mpg"
+fi
+}
+
+encode_fade ()
+{
+if [ "$yuvcat" -eq 0 ]; then
+       if [ "$pal" -eq 1 ] ; then
+               cat "$outdir"/fade_*.ppm | ppmtoy4m -v $verbosity -n 0 -F 25:1 -A 59:54 -I p \
+               | mpeg2enc -v $verbosity -a 2 -q 8 -s -M 3 -f 8 -b 6000 -I 0 -o "$outdir/slide_$di.mpg"
+       else
+               cat "$outdir"/fade_*.ppm | ppmtoy4m -v $verbosity -n 0 -F 30000:1001 -A 10:11 -I p \
+               | mpeg2enc -v $verbosity -a 2 -q 8 -s -M 3 -f 8 -b 6000 -I 0 -o "$outdir/slide_$di.mpg"
+       fi
+else  #in yuvcat mode, write the yuv out to fd 55, which is the mpeg2enc process
+       if [ "$yuvfirstfile" -eq 1 ]; then
+               yuvstrip=cat
+               yuvfirstfile=0
+       else
+               yuvstrip=yuvstrip
+       fi
+       if [ "$pal" -eq 1 ] ; then
+               cat "$outdir"/fade_*.ppm | ppmtoy4m -v $verbosity -n 0 -F 25:1 -A 59:54 -I p | $yuvstrip >&55
+       else
+               cat "$outdir"/fade_*.ppm | ppmtoy4m -v $verbosity -n 0 -F 30000:1001 -A 10:11 -I p | $yuvstrip >&55
+       fi
+fi
+}
+
+waitforfile ()
+{
+	# $1 is the filename
+	## wait for the file to exist...
+	while [ ! -f "$1" ] 
+	do
+		sleep 1s
+	done
+}
+
+waitforfiles ()
+{
+	# $1 is the filename (with path)
+	# $2 is the max digits in the series
+	# $1_$2.ppm
+	## wait for all files in a fade to exist...
+	dir_tmp=`dirname "$1"`
+	for i_tmp in `seq 1 $2` ; do
+		di_tmp=`addzeros $i_tmp`
+		newfile_tmp="$1"_$di_tmp.ppm
+#		echo "newfile_tmp=$newfile_tmp"
+		while [ ! -f "$newfile_tmp" ] 
+		do
+			sleep 1s
+		done
+	done
+}
+
+extracopies ()
+{
+	this_frame=$1
+	total_frames=$2
+#	echo "this_frame=$this_frame stepsize=$stepsize total_frames=$total_frames"
+	waitforfile "$outdir/fade_$dj.ppm" 
+#	if [ "$low_quality" -eq 1 ] ; then  # fix bug on my machine
+#		sleep 2s
+#	fi
+
+	if [ $stepsize -gt 1 ] ; then
+		if [ $this_frame -eq $total_frames ] ; then
+			## last frame in sequence, don't make any copies!
+			echo -n ''
+		elif [ $this_frame -gt $(( $total_frames - $stepsize )) ] ; then
+			## make ( $total_frames - $this_frame ) copies
+			for it in `seq 1 $(( $total_frames - $this_frame ))`; do
+				dj2=`addzeros $(( $this_frame + $it ))`
+				cp "$outdir/fade_$dj.ppm" "$outdir/fade_$dj2.ppm"
+				waitforfile "$outdir/fade_$dj2.ppm"   # need on slow systems?
+			done
+		else
+			## loop over number of copies = stepsize-1
+			for it in `seq 1 $(( $stepsize - 1 ))`; do
+				dj2=`addzeros $(( $this_frame + $it ))`
+				cp "$outdir/fade_$dj.ppm" "$outdir/fade_$dj2.ppm"
+				waitforfile "$outdir/fade_$dj2.ppm"   # need on slow systems?
+			done
+		fi
+	fi
+}
+
+make_arrows ()
+{
+	## make arrow buttons for future use:
+	scale=2
+	pt0x=550 ; pt0y=375 
+	pt1x=$(( $pt0x + 0 * $scale )) ; pt1y=$(( $pt0y + -3 * $scale ))
+	pt2x=$(( $pt0x + 10 * $scale )) ; pt2y=$(( $pt0y + -3 * $scale ))
+	pt3x=$(( $pt0x + 10 * $scale )) ; pt3y=$(( $pt0y + -8 * $scale ))
+	pt4x=$(( $pt0x + 18 * $scale )) ; pt4y=$(( $pt0y + 0 * $scale ))
+	pt5x=$(( $pt0x + 10 * $scale )) ; pt5y=$(( $pt0y + 8 * $scale ))
+	pt6x=$(( $pt0x + 10 * $scale )) ; pt6y=$(( $pt0y + 3 * $scale ))
+	pt7x=$(( $pt0x + 0 * $scale )) ; pt7y=$(( $pt0y + 3 * $scale ))
+	pt8x=$(( $pt0x + 0 * $scale )) ; pt8y=$(( $pt0y + -3 * $scale ))
+	
+	convert -size "$resolution" xc:transparent -depth 8 -fill white -stroke black \
+		-draw "polygon $pt1x,$pt1y $pt2x,$pt2y $pt3x,$pt3y $pt4x,$pt4y $pt5x,$pt5y $pt6x,$pt6y $pt7x,$pt7y $pt8x,$pt8y" \
+		"$outdir/right_arrow.png"
+	convert -size "$resolution" xc:transparent -depth 8 -colors 3 +antialias -fill red -stroke red \
+		-draw "polygon $pt1x,$pt1y $pt2x,$pt2y $pt3x,$pt3y $pt4x,$pt4y $pt5x,$pt5y $pt6x,$pt6y $pt7x,$pt7y $pt8x,$pt8y" \
+		"$outdir/right_arrow_mask.png"
+	
+	convert "$outdir/right_arrow.png" -flop "$outdir/left_arrow.png"
+	convert "$outdir/right_arrow_mask.png" -flop -depth 8 -colors 3 +antialias "$outdir/left_arrow_mask.png"
+	
+	pt0x=$(( $width / 2 )) ; pt0y=375 
+	pt1x=$(( $pt0x + 0 * $scale )) ; pt1y=$(( $pt0y + -8 * $scale ))
+	pt2x=$(( $pt0x + -8 * $scale )) ; pt2y=$(( $pt0y + 0 * $scale ))
+	pt3x=$(( $pt0x + -3 * $scale )) ; pt3y=$(( $pt0y + 0 * $scale ))
+	pt4x=$(( $pt0x + -3 * $scale )) ; pt4y=$(( $pt0y + 10 * $scale ))
+	pt5x=$(( $pt0x + 3 * $scale )) ; pt5y=$(( $pt0y + 10 * $scale ))
+	pt6x=$(( $pt0x + 3 * $scale )) ; pt6y=$(( $pt0y + 0 * $scale ))
+	pt7x=$(( $pt0x + 8 * $scale )) ; pt7y=$(( $pt0y + 0 * $scale ))
+	pt8x=$(( $pt0x + 0 * $scale )) ; pt8y=$(( $pt0y + -8 * $scale ))
+	
+	convert -size "$resolution" xc:transparent -depth 8 -fill white -stroke black \
+	-draw "polygon $pt1x,$pt1y $pt2x,$pt2y $pt3x,$pt3y $pt4x,$pt4y $pt5x,$pt5y $pt6x,$pt6y $pt7x,$pt7y $pt8x,$pt8y" \
+		"$outdir/up_arrow.png"
+	convert -size "$resolution" xc:transparent -depth 8 -colors 3 +antialias -fill red -stroke red \
+		-draw "polygon $pt1x,$pt1y $pt2x,$pt2y $pt3x,$pt3y $pt4x,$pt4y $pt5x,$pt5y $pt6x,$pt6y $pt7x,$pt7y $pt8x,$pt8y" \
+		"$outdir/up_arrow_mask.png"
+	
+	## merge buttons:
+	composite -colors 3 -depth 8 "$outdir"/right_arrow.png "$outdir/up_arrow.png" "$outdir/menu_ur.png"
+	composite -colors 3 -depth 8 "$outdir"/left_arrow.png "$outdir/up_arrow.png" "$outdir/menu_lu.png"
+	composite -colors 3 -depth 8 "$outdir"/left_arrow.png "$outdir/menu_ur.png" "$outdir/menu_lur.png"
+	
+	## create button masks:
+	composite -colors 3 -depth 8 "$outdir"/right_arrow_mask.png "$outdir/up_arrow_mask.png" "$outdir/menu_mask_ur.png"
+	composite -colors 3 -depth 8 "$outdir"/left_arrow_mask.png "$outdir/up_arrow_mask.png" "$outdir/menu_mask_lu.png"
+	composite -colors 3 -depth 8 "$outdir"/left_arrow_mask.png "$outdir/menu_mask_ur.png" "$outdir/menu_mask_lur.png"
+#	this_chap=0
+}
+
+duration2hu ()
+{
+	## break up the duration into the integer seconds and ms:
+	duration_sec=`echo $1 | awk -F. '{ print $1 }'`
+	if [ -z "$duration_sec" ] ; then duration_sec=0 ; fi
+	duration_hu=`echo $1 | awk -F. '{ print $2 }'`
+	characters=`echo "$duration_hu" | wc --chars`
+	if [ "$characters" -eq 1 ] ; then
+		## no decimal was specified
+		duration_hu=0
+	elif [ "$characters" -eq 2 ] ; then
+		## 1 decimal was specified
+		duration_hu="$duration_hu"0
+	elif [ "$characters" -eq 3 ] ; then
+		## 2 decimal was specified. 
+		echo -n ""	
+	elif [ "$characters" -eq 4 ] ; then
+		## 3 decimal was specified. 
+		duration_hu="${duration_hu:0:2}"
+	else
+		echo '[dvd-slideshow] Error: too many decimals specified'
+		cleanup
+		exit 1
+	fi
+	duration="$(( 100 * $duration_sec + $duration_hu ))"
+	echo "$duration"
+}
+
+duration2ms ()
+{
+	## break up the duration into the integer seconds and ms:
+	duration_sec=`echo $1 | awk -F. '{ print $1 }'`
+	if [ -z "$duration_sec" ] ; then duration_sec=0 ; fi
+	duration_ms=`echo $1 | awk -F. '{ print $2 }'`
+	characters=`echo "$duration_ms" | wc --chars`
+	if [ "$characters" -eq 1 ] ; then
+		## no decimal was specified
+		duration_ms=0
+	elif [ "$characters" -eq 2 ] ; then
+		## 1 decimal was specified
+		duration_ms="$duration_ms"00
+	elif [ "$characters" -eq 2 ] ; then
+		## 2 decimal was specified
+		duration_ms="$duration_ms"0
+	elif [ "$characters" -eq 3 ] ; then
+		## 3 decimal was specified. 
+		echo -n ""	
+	else
+		echo "[dvd-slideshow] ERROR: Duration string $1 is bad."
+		echo "[dvd-slideshow] 	Probably too many decimal places.  "
+		echo "[dvd-slideshow]   There is no point specifying more than 0.001 seconds."
+		cleanup; exit 1
+	fi
+	duration="$(( 1000 * $duration_sec + $duration_ms ))"
+	echo "$duration"
+}
+
+nextslidename ()
+{
+	## get next slide:
+	image1="${image[$(($i+1))]}" ; dur1="${duration[$(($i+1))]}"
+	image2="${image[$(($i+2))]}" ; dur2="${duration[$(($i+2))]}"
+	image3="${image[$(($i+3))]}" ; dur3="${duration[$(($i+3))]}"
+	if [ -f "$image1" ] || [ "$image1" == 'title' ] || ( [ "$image1" == 'background' ] && [ "$dur1" -ne 0 ] ) ; then
+		nextimage="$image1"
+	elif [ -f "$image2" ] || [ "$image2" == 'title' ] || ( [ "$image2" == 'background' ] && [ "$dur2" -ne 0 ] ) ; then
+		nextimage="$image2"
+	elif [ -f "$image3" ] || [ "$image3" == 'title' ] || ( [ "$image3" == 'background' ] && [ "$dur3" -ne 0 ] ) ; then
+		nextimage="$image3"
+	else 
+		## next line is not an image!
+		echo '# ERROR: Could not find a valid next slide'
+		echo '#	      This happens when a fade cannot locate a future image in your .txt file'
+		echo '#	      Fix this in your input file and re-run dvd-slideshow.'
+		cleanup; exit 0
+	fi
+	echo "$nextimage"
+}
+
+nextslideincrement ()
+{
+	## get next slide:
+	image1="${image[$(($i+1))]}" ; dur1="${duration[$(($i+1))]}"
+	image2="${image[$(($i+2))]}" ; dur2="${duration[$(($i+2))]}"
+	image3="${image[$(($i+3))]}" ; dur3="${duration[$(($i+3))]}"
+	if [ -f "$image1" ] ; then
+		nextincrement="1"
+	elif [ "$image1" == 'title' ] || ( [ "$image1" == 'background' ] && [ "$dur1" -ne 0 ] ); then
+		nextincrement="1"
+	elif [ -f "$image2" ] ; then
+		nextincrement="2"
+	elif [ "$image2" == 'title' ] || ( [ "$image2" == 'background' ] && [ "$dur2" -ne 0 ] ); then
+		nextincrement="2"
+	elif [ -f "$image3" ] ; then
+		nextincrement="3"
+	elif [ "$image3" == 'title' ] || ( [ "$image3" == 'background' ] && [ "$dur3" -ne 0 ] ); then
+		nextincrement="3"
+	else 
+		## next line is not an image!
+		echo '# ERROR: Could not find a valid next slide'
+		echo '#	      This happens when a fade cannot locate a future image in your .txt file'
+		echo '#	      Fix this in your input file and re-run dvd-slideshow.'
+		cleanup; exit 0
+	fi
+	echo "$nextincrement"
+}
+
+previousslideppm ()
+{
+	## get previous image:
+	if [ -f "$outdir/slide_$(($i-1)).ppm" ] ; then
+		previousimage="$outdir/slide_$(($i-1)).ppm"
+	elif [ -f "$outdir/slide_$(($i-2)).ppm" ] ; then
+		previousimage="$outdir/slide_$(($i-2)).ppm"
+	elif [ -f "$outdir/slide_$(($i-3)).ppm" ] ; then
+		previousimage="$outdir/slide_$(($i-3)).ppm"
+	else 
+		## previous line is not an image!
+		echo '# ERROR: Could not find a valid previous image'
+		echo '#	      This happens when a fade cannot locate a previous image in your .txt file'
+		echo '#	      Fix this in your input file and re-run dvd-slideshow.'
+		cleanup; exit 0
+	fi
+	echo "$previousimage"
+}
+
+titleslide ()
+{
+	## $1 contains the head title, and $2 contains the sub-title
+	title1="$1"
+	title2="$2"
+	if [ -z "$title1" ] && [ -z "$title2" ] ; then
+		echo "[dvd-slideshow] ERROR: No title text was found. Syntax:"
+		echo "[dvd-slideshow]        title:duration:TopTitle:BottomTitle"
+		cleanup; exit 1
+	fi
+
+	title2_bgtop=$title2_bar_location_y
+	title2_bgbot=$(( $title2_bar_location_y + $title2_bar_height ))
+	if [ -n "$title1" ] ; then
+		if [ "$title1_bar_height" -ne 0 ] ; then
+			convert -size "$resolution" xc:transparent -fill white \
+		       	-draw "Rectangle 0,0,$width,$title1_bar_height" miff:- | \
+			composite -type TrueColor -depth 8 -dissolve 50 - \
+			"$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"	
+		else
+			cp "$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"
+		fi
+		convert -size "$resolution" xc:transparent -fill black \
+		-pointsize $title1_font_size -gravity NorthWest $font \
+		-draw "text $title1_text_location_x,$title1_text_location_y \"${title1}\"" miff:- | \
+		composite -type TrueColor -depth 8 - \
+		"$outdir/slide_$i.ppm" "$outdir/title1.ppm"
+		cp "$outdir/title1.ppm" "$outdir/title.ppm"
+	fi
+	if [ -n "$title2" ] ; then
+		if [ "$title2_bar_height" -ne 0 ] ; then
+			convert -size "$resolution" xc:transparent -fill white \
+			-draw "Rectangle 0,$title2_bgtop,$width,$title2_bgbot" "$outdir/title_background.png"
+		else
+			convert -size "$resolution" xc:transparent "$outdir/title_background.png"
+		fi
+		if [ -f "$outdir/title1.ppm" ] ; then # use title1 image
+			composite -type TrueColor -depth 8 -dissolve 50 "$outdir/title_background.png" \
+			"$outdir/title1.ppm" "$outdir/slide_$i.ppm"	
+		else  # use background image (no first title)
+			composite -type TrueColor -depth 8 -dissolve 50 "$outdir/title_background.png" \
+			"$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"	
+		fi
+		convert -size "$resolution" xc:transparent -fill black \
+			-pointsize $title2_font_size -gravity North $font \
+			-draw "text $title2_text_location_x,$title2_text_location_y \"${title2}\"" miff:- | \
+		composite -type TrueColor -depth 8 - \
+			"$outdir/slide_$i.ppm" "$outdir/title.ppm"
+	fi
+	check_rm "$outdir/title1.ppm"
+}
+
+background ()
+{
+		## input is:  $1 = effect/image
+		# output is written to $outdir/slideshow_background.ppm 
+		bg="$1"
+		if [ -f "$bg" ] ; then # if effect is a background file
+			echo "[dvd-slideshow] Using background image ${bg}"
+#			convert "${bg}" -resize x"$height" -bordercolor black -border "$width"x240 \
+#			-gravity center -crop "$width"x"$height"'+0+0!' -type TrueColor -depth 8 $outdir/slideshow_background.ppm
+                       ## autocrop?
+                       do_autocrop=0
+                       if [ "$autocrop" -eq 1 ] ; then
+                               ## get width and height of the image:
+                               image_width="`imagewidth "$bg"`"
+                               image_height="`imageheight "$bg"`"
+                               ratio=$(( 100* $image_width / $image_height ))
+                               out_ratio=$(( 100* $width / $height ))
+                               if [ "$ratio" -lt "$(( $out_ratio + 30 ))" ] && [ "$ratio" -gt $(( $out_ratio - 30 )) ] ; then
+                                       do_autocrop=1
+                                       echo "[dvd-slideshow] autocrop background image"
+                               else
+                                       do_autocrop=0
+                               fi
+                       fi
+
+                       if [ "$do_autocrop" -eq 1 ]; then
+                               # autocrop background image
+                               convert "${bg}" -resize "$width"x \
+                               -gravity center -crop "$width"x"$height"'+0+0!' $outdir/slideshow_background.ppm
+                       else
+                               #don't autorop
+                               convert "${bg}" -resize x"$height" -bordercolor black -border "$width"x240 \
+                               -gravity center -crop "$width"x"$height"'+0+0!' -type TrueColor -depth 8 $outdir/slideshow_background.ppm
+                       fi
+			bgfile="$bg"
+		elif [ "$bg" == 'black' ] ; then  # I guess we could add other types of backgrounds here!
+			## use plain black background with no picture
+			echo "[dvd-slideshow] Creating black background"
+			convert -size "$width"'x'"$height" xc:black -type TrueColor -depth 8 $outdir/slideshow_background.ppm
+			bgfile="black"
+		elif [ "$bg" == 'white' ] ; then  # I guess we could add other types of backgrounds here!
+			## use plain white background with no picture
+			echo "[dvd-slideshow] Creating white background"
+			convert -size "$width"'x'"$height" xc:white -type TrueColor -depth 8 $outdir/slideshow_background.ppm
+			bgfile="white"
+		elif [ "${bg:0:1}" == '#' ] ; then  # user passed a #RRGGBB hex color
+			echo "[dvd-slideshow] Creating $bg color background"
+			convert -size "$width"'x'"$height" xc:"$bg" -type TrueColor -depth 8 $outdir/slideshow_background.ppm
+			bgfile="$bg"
+		fi
+#		convert "$outdir/slideshow_background.ppm" -type TrueColor -depth 8 "$outdir/slideshow_background.mpc"
+}
+
+parse_window ()
+{
+	## pass a string $1, and parse_window will output coordinates $x0 $y0 $x1 $y1 $xi $yi
+	## Parse the parameters for kenburns or crop effects
+	# xi,yi is the top left corner of the image (for later use)
+	# x0,y0 is the top left corner of the crop 
+	# x1,y1 is the bottom right corner of the crop, so:
+	# textfile format is:  
+	# file:duration:comment:kenburns:xs0,ys0;xs1,ys1;xe0,ye0;xe1,ye1
+	# or
+	# file:duration:comment:kenburns:start 0%-100%;start_location;end 0%-100%;end_location
+	# where 0%-100% indicates the fraction of the window width/height, and
+	# where start_location and end_location can be:
+	# 	topleft			topmiddle|top		topright
+	#	middleleft|left		middle			middleright|right
+	#	bottomleft		bottommiddle|bottom	bottomright
+	# or
+	# 	x%,y%
+	#	where % is a percentage of the window width/height starting from the
+	# 	top left corner of the screen.
+	# or
+	# 	imagewidth | imageheight
+	#	where the window width or height will be scaled to fill the full
+	#	width or height of the dvd screen.
+	#	
+	#	All of these keywords can be used together!
+
+	it=`echo "$1" | awk -F';' '{print $1}' | awk -F% '{print NF}'`
+	firstarg=`echo "$1" | awk -F';' '{print $1}'`
+	image_width="`imagewidth "$2"`"
+	image_height="`imageheight "$2"`"
+	## calculate frame size after adding black side bars for portrait pictures:
+	if [ $image_width -gt $image_height ] ; then
+		# landscape: width will be scaled to the output DVD width
+		#	top/bottom might have black bars
+		new_image_height=$(( $image_width * $height / $width ))
+		new_image_width=$image_width
+		xi=0
+		yi=$(( ( $new_image_height - $image_height ) / 2 ))
+	else
+		# portrait: height will be scaled to the output DVD height
+		#	sides will have black bars
+		new_image_width=$(( $image_height * $width / $height ))
+		new_image_height=$image_height
+		yi=0
+		xi=$(( ( $new_image_width - $image_width ) / 2 ))
+	fi
+	if [ "$it" -eq 2 ] || [ "$firstarg" == 'imagewidth' ] || [ "$firstarg" == 'imageheight' ] ; then 
+		## use "keywords"
+		loc=`echo "$1" | awk -F';' '{print $2}'`
+		if [ "$firstarg" == 'imagewidth' ] ; then 
+			# scale width to equal output dvd width:
+			xw=$image_width
+			yh=$(( $height * $xw / $width )) 
+		elif [ "$firstarg" == 'imageheight' ] ; then 
+			# scale height to equal output dvd width:
+			yh=$image_height
+			xw=$(( $width * $yh / $height ))
+		else
+			zoom_percent=`echo "$1" | awk -F';' '{print $1}' | awk -F% '{print $1}'`
+			[ $debug -ge 3 ] && echo "[dvd-slideshow] zoom=$zoom_percent, loc=$loc "
+			xw=$(( $new_image_width * $zoom_percent / 100 ))
+			yh=$(( $new_image_height * $zoom_percent / 100 ))
+		fi
+		## next line is because we want the zoom % coordinates to be relative to the
+		## whole screen size, so if you have a tall, narrow picture, 50% will mean
+		## half of the height, etc...	
+		# now, calculate the actual coordinates:
+		[ $debug -ge 3 ] && echo "[dvd-slideshow] xw=$xw yh=$yh"
+		ymiddle0=$(( $new_image_height / 2 - $yh / 2 )) 
+		ymiddle1=$(( $new_image_height / 2 + $yh / 2 ))
+		xmiddle0=$(( $new_image_width / 2 - $xw / 2 ))
+		xmiddle1=$(( $new_image_width / 2 + $xw / 2 ))
+		[ $debug -ge 3 ] && echo "[dvd-slideshow] ymiddle0=$ymiddle0 ymiddle1=$ymiddle1  xmiddle0=$xmiddle0 xmiddle1=$xmiddle1"
+		it=`echo "$1" | awk -F';' '{print $2}' | awk -F% '{print NF}'`
+		if [ "$it" -ge 2 ] ; then # second arg contains a %
+			# location is specified a a percent of the window size
+			xcenter_pct=`echo "$1" | awk -F';' '{print $2}' | awk -F',' '{print $1}' | awk -F% '{print $1}'`
+			ycenter_pct=`echo "$1" | awk -F';' '{print $2}' | awk -F',' '{print $2}' | awk -F% '{print $1}'`
+#			[ $debug -ge 3 ] && echo "[dvd-slideshow] xcenter_pct=$xcenter_pct ycenter_pct=$ycenter_pct"
+			[ -z "$xcenter_pct" ] && (echo '[dvd-slideshow] Error: bad xcenter percentage' ; cleanup; exit 1)
+			[ -z "$ycenter_pct" ] && (echo '[dvd-slideshow] Error: bad ycenter percentage' ; cleanup; exit 1)
+			xcenter=$(( $new_image_width * $xcenter_pct / 100 ))
+			ycenter=$(( $new_image_height * $ycenter_pct / 100 ))
+#			[ $debug -ge 3 ] && echo "[dvd-slideshow] xcenter=$xcenter ycenter=$ycenter"
+			x0=$(( $xcenter - $xw / 2 )) ; x1=$(( $xcenter + $xw / 2 ))
+			y0=$(( $ycenter - $yh / 2 )) ; y1=$(( $ycenter + $yh / 2 ))
+		elif [ "$loc" == 'topleft' ] ; then
+			x0=0; x1=$xw
+			y0=0; y1=$yh
+		elif [ "$loc" == 'middleleft' ] || [ "$loc" == 'left' ] ; then
+			x0=0; x1=$xw
+			y0=$ymiddle0; y1=$ymiddle1
+		elif [ "$loc" == 'bottomleft' ] ; then
+			x0=0; x1=$xw
+			y0=$(( $new_image_height - $yh )) ; y1=$new_image_height
+		elif [ "$loc" == 'topmiddle' ] || [ "$loc" == 'top' ] ; then
+			x0=$xmiddle0; x1=$xmiddle1
+			y0=0; y1=$yh
+		elif [ "$loc" == 'middle' ] ; then
+			x0=$xmiddle0; x1=$xmiddle1
+			y0=$ymiddle0; y1=$ymiddle1
+		elif [ "$loc" == 'bottommiddle' ] || [ "$loc" == 'bottom' ] ; then
+			x0=$xmiddle0; x1=$xmiddle1
+			y0=$(( $new_image_height - $yh )) ; y1=$new_image_height
+		elif [ "$loc" == 'topright' ] ; then
+			x0=$(( $new_image_width - $xw )) ; x1=$new_image_width
+			y0=0; y1=$yh
+		elif [ "$loc" == 'middleright' ] || [ "$loc" == 'right' ] ; then
+			x0=$(( $new_image_width - $xw )) ; x1=$new_image_width
+			y0=$ymiddle0; y1=$ymiddle1
+		elif [ "$loc" == 'bottomright' ] ; then
+			x0=$(( $new_image_width - $xw )) ; x1=$new_image_width
+			y0=$(( $new_image_height - $yh )) ; y1=$new_image_height
+		else	
+			echo "[dvd-slideshow] Error: bad syntax in kenburns/crop location: $loc"
+			cleanup; exit 1
+		fi
+	else  # check for original format with explicit start/end coordinates:
+		## coordinate system is relative to the actual picture, unscaled!!!
+		## we need to convert this to the buffered (dvd aspect ratio) coordinate system!!!	
+		x0=`echo "$1" | awk -F';' '{print $1}' | awk -F',' '{print $1}'`
+		y0=`echo "$1" | awk -F';' '{print $1}' | awk -F',' '{print $2}'`
+		x1=`echo "$1" | awk -F';' '{print $2}' | awk -F',' '{print $1}'`
+		y1=`echo "$1" | awk -F';' '{print $2}' | awk -F',' '{print $2}'`
+
+		
+		# width and height of area passed:
+		xw=$(( $x1 - $x0 )) ; yh=$(( $y1 - $y0 ))
+
+#		if [ "$x0" -lt "$image_width" ] ; then 
+#			# x start is inside image
+#		else
+#			# scale width to equal output dvd width:
+#			xw=$image_width
+#			yh=$(( $height * $xw / $width )) 
+#		fi
+#
+#		if [ "$yh" -lt "$image_height" ] ; then 
+#			# y coordinates are inside image
+#		else
+#			# scale height to equal output dvd width:
+#			yh=$image_height
+#			xw=$(( $width * $yh / $height ))
+#		fi
+#
+#		xi0=$(( $x0-$xi )); yi0=$(( $y0-$yi )) 
+#		xi1=$(( $x1-$xi )); yi1=$(( $y1-$yi )) 
+#		[ $debug -ge 3 ] && echo "[dvd-slideshow] image crop coordinates=$xi0,$yi0 ; $xi1,$yi1"
+
+		## make sure the image crop coordinates are not outside the image:
+		[ $xi -eq 0 ] && x0=$x0 || x0=$(( $x0 + $xi ))
+		[ $xi -eq 0 ] && x1=$x1 || x1=$(( $x1 + $xi ))
+		[ $yi -eq 0 ] && y0=$y0 || y0=$(( $y0 + $yi ))
+		[ $yi -eq 0 ] && y1=$y1 || y1=$(( $y1 + $yi ))
+	fi
+}
+
+addtransparentbackground ()  # obsolete:  delete this soon!
+{
+	# input is current image.  output is temp_slideshow_image.png
+	image_width="`imagewidth "${image[$i]}"`"
+	image_height="`imageheight "${image[$i]}"`"
+#	echo "image_width=$image_width image_height=$image_height"
+	ratio=$(( 100* $image_width / $image_height ))
+	out_ratio=$(( 100* $width / $height ))
+#	echo "ratio=$ratio  out_ratio=$out_ratio"
+	if [ "$ratio" -gt "$(( $out_ratio ))" ] ; then
+		# image width greater than output width at same scale (add black to top and bottom)
+		newheight=$(( $height * $image_width / $width ))
+#		echo "newheight=$newheight"
+       		convert -size "$image_width"x"$newheight" xc:transparent "$outdir"/temp_slideshow_image.png
+		composite -gravity center -type TrueColor \
+		"${image[$i]}" "$outdir/temp_slideshow_image.png" "$outdir/temp_slideshow_image.png"
+	elif [ "$ratio" -lt $(( $out_ratio )) ] ; then
+		# image height greater than output height at same scale (add black to left and right)
+		newwidth=$(( $width * $image_height / $height ))
+#		echo "newwidth=$newwidth"
+       		convert -size "$newwidth"x"$image_height" xc:transparent "$outdir"/temp_slideshow_image.png
+		composite -gravity center -type TrueColor \
+		"${image[$i]}" "$outdir/temp_slideshow_image.png" "$outdir/temp_slideshow_image.png"
+	else
+		# no extra sizing required.  
+		convert "${image[$i]}" "$outdir/temp_slideshow_image.png"
+	fi
+}
+
+div10 ()
+{
+	# takes a number and divides by 10, rounding appropriately
+	number=$1
+	whole=`expr $number / 10`
+	fraction=`expr $number % 10`
+	if [ $fraction -ge 5 ] ; then
+		whole=$(( $whole + 1 ))  # round up
+	fi
+	echo $whole
+}
+
+imagewidth ()
+{
+	it="`identify "$1" | awk -F'JPEG ' '{print $2}' | cut -d 'x' -f 1`"
+	if [ -z $it ] ; then
+		it="`identify "$1" | awk -F'PNM ' '{print $2}' | cut -d 'x' -f 1`"
+	fi
+	if [ -z $it ] ; then
+		it="`identify "$1" | awk -F'PNG ' '{print $2}' | cut -d 'x' -f 1`"
+	fi
+	if [ -z $it ] ; then
+		it="`identify "$1" | awk -F'MPC ' '{print $2}' | cut -d 'x' -f 1`"
+	fi
+	echo "$it"
+}
+
+imageheight ()
+{
+	it="`identify "$1" | awk -F'JPEG ' '{print $2}'  | cut -d 'x' -f 2 | cut -d ' ' -f 1`"
+	if [ -z $it ] ; then
+		it="`identify "$1" | awk -F'PNM ' '{print $2}'  | cut -d 'x' -f 2 | cut -d ' ' -f 1`"
+	fi
+	if [ -z $it ] ; then
+		it="`identify "$1" | awk -F'PNG ' '{print $2}'  | cut -d 'x' -f 2 | cut -d ' ' -f 1`"
+	fi
+	if [ -z $it ] ; then
+		it="`identify "$1" | awk -F'MPC ' '{print $2}'  | cut -d 'x' -f 2 | cut -d ' ' -f 1`"
+	fi
+	echo "$it"
+}
+
+mycrop ()
+{
+	# my crop function:  does all the cropping on the current image
+	# using the parameters x0,y0 ; x1,y1 ; xi,yi in memory
+	# output is just the crop parameters:
+	# c_width, c_height xc0,yc0  (for the actual crop)
+	# and:
+	# xci,yci for the location of the top left corner of the cropped image
+	# relative to the output window.
+
+	## the input coordinates are relative to the original image size, buffered out to
+	## the output dvd aspect ratio
+	
+	## we need to convert the existing coordinates back to the actual image coordinates:
+	## top left corner of dvd window is 0,0
+	## top left corner of image is at xi,yi
+	## top left corner of the cropped image is at x0,y0
+
+	## figure out the size of the window scaled to the original image size:
+	ratio=$(( 100* $image_width / $image_height ))
+	out_ratio=$(( 100* $width / $height ))
+	if [ "$ratio" -gt "$(( $out_ratio ))" ] ; then
+		# image width greater than output width at same scale
+		newwidth=$image_width
+		newheight=$(( $height * $image_width / $width ))
+	elif [ "$ratio" -le $(( $out_ratio )) ] ; then
+		# image height greater than output height at same scale 
+		newwidth=$(( $width * $image_height / $height ))
+		newheight=$image_height
+	fi
+	[ $debug -ge 3 ] && echo "[dvd-slideshow] new_width=$newwidth new_height=$newheight"
+
+	xi0=$(( $x0-$xi )); yi0=$(( $y0-$yi )) 
+	xi1=$(( $x1-$xi )); yi1=$(( $y1-$yi )) 
+	[ $debug -ge 3 ] && echo "[dvd-slideshow] image crop coordinates=$xi0,$yi0 ; $xi1,$yi1"
+
+	## make sure the image crop coordinates are not outside the image:
+	[ $xi0 -lt 0 ] && xc0=0 || xc0=$xi0 
+	[ $xi1 -gt $image_width ] && xc1=$image_width || xc1=$xi1
+	[ $yi0 -lt 0 ] && yc0=0 || yc0=$yi0
+	[ $yi1 -gt $image_height ] && yc1=$image_height || yc1=$yi1
+	c_width=$(( $xc1 - $xc0 )) ; c_height=$(( $yc1 - $yc0 ))
+
+	## where to put the top left corner of the cropped image relative to the background?
+	deltax=$(( 10000* $width / $c_width )); deltay=$(( 10000* $height / $c_height ))
+	## rescale % will be the smaller of the two deltas:  10000 is to retain the resolution until dividing.
+	[ $deltax -lt $deltay ] && rescale=$deltax || rescale=$deltay
+	if [ $xi0 -lt 0 ] ; then
+		## left of cropped image is in the middle of the dvd window
+		xci=`div10 $(( $rescale * -1 * $xi0 / 1000 ))`
+	else
+		## left of cropped image should be at x=0 afterward
+		xci=0
+	fi
+	if [ $yi0 -lt 0 ] ; then
+		## top of cropped image is in the middle of the dvd window
+		yci=`div10 $(( $rescale * -1 * $yi0 / 1000 ))`
+	else
+		## top of cropped image should be at y=0 afterward
+		yci=0
+	fi
+	[ $debug -ge 3 ] && echo "[dvd-slideshow] image crop coordinates=$xc0,$yc0 ; $xc1,$yc1 crop_width=$c_width crop_height=$c_height rescale=$rescale"
+}
+
+wavlength ()
+{
+		sox "$1" -e stat 2> trash.txt 
+		song_length=`cat trash.txt | grep 'Length (seconds):' | awk -F: '{print $2}' | tr -d [:blank:]`
+		song_length_seconds=`echo $song_length | awk -F. '{print $1}'`
+		if [ -z "$song_length_seconds" ] ; then song_length_seconds=0 ; fi
+		song_length_hu=`echo $song_length | awk -F. '{printf ("%3.2f",$2)}' | awk -F. '{print $2}'`
+		## make sure we have two decimal places?
+		if [ -z "$song_length_hu" ] ; then song_length_hu=0 ; fi
+#		echo "song_length=$song_length_seconds"."$song_length_hu"
+		song_length="$(( 100 * $song_length_seconds + $song_length_hu ))"
+		rm trash.txt
+		echo "$song_length"
+}
+
+############################################# End of functions
+
+# verity output directory exists:
+if [ -z "$outdir" ] ; then
+	if [ -w `pwd` ] ; then
+		echo "[dvd-slideshow] Output directory not specified."
+		echo "[dvd-slideshow] Using `pwd`"
+		outdir="`pwd`"
+	else
+		echo 'ERROR: Output directory not specified.'
+		exit
+	fi
+fi
+
+## initialize log file:
+echo "[dvd-slideshow] `date`" > "$outdir/$logfile"
+echo "[dvd-slideshow] dvd-slideshow version $version" >> "$outdir/$logfile"
+echo "[dvd-slideshow] Output directory=$outdir" >> "$outdir/$logfile"
+
+
+checkforprog ppmtoy4m
+checkforprog sox
+checkforprog convert
+#checkforprog pngtopnm
+checkforprog dvdauthor
+## print out versions of programs to make debugging easier?
+
+if [ "$ac3" -eq 1 ] ; then
+        if [ -z "$it" ] ; then
+                # no ffmpeg!  use mp2 audio instead:
+                echo "[dvd-slideshow] Warning:  no ffmpeg found for AC3 audio encoding."
+                echo "[dvd-slideshow]           Using MP2 audio instead."
+                ac3=0
+        fi
+fi
+
+#Find the fonts
+font1=`find $font_dir -name $font1 | head -1`
+font2=`find $font_dir -name $font2 | head -1`
+
+# verify fonts exist:
+if [ -f "$font1" ] ; then 
+	font="-font $font1"
+elif [ -f "$font2" ] ; then
+	font="-font $font2"
+else
+	myecho "[dvd-slideshow] Cannot find required fonts.  Using default ImageMagick font."
+	font=""
+fi
+
+let i=0
+total_video_length=0
+audio_inside_txtfile=0
+## let's parse the txtfile:
+total_lines=`wc -l ${input_txtfile} | awk '{print $1}'`
+total_lines=$(( $total_lines + 1 ))
+let line=1
+while [ $line -ne $total_lines -a $total_lines -ne 0 ];
+do
+        # change @: which is "escaped" : to something else so that
+        # it doesn't separate parameters.
+        thisline=`sed -n "$line"p "${input_txtfile}" |sed -e 's/\\\:/@_@/g'`
+#	myecho "thisline=$thisline"
+	if [ "${thisline:0:1}" == '#' ] ; then
+		line=$(( $line + 1 ))
+		continue # commented line. ignore it.
+	elif [ -z `echo "$thisline" | tr -d [:blank:]` ] ; then
+		line=$(( $line + 1 ))
+		continue # blank line. ignore it.
+	fi 
+
+	## check for config variables:
+	config=`echo "${thisline}" | cut -d= -f1 | tr -d [:blank:]`
+	config2=`echo "${thisline}" | cut -d= -f2 | cut -d# -f1 | tr -d [:blank:]`
+	## check for global configuration variables:
+	if [ "$config" == 'debug' ] ; then
+		debug="$config2" ; myecho "[dvd-slideshow] debug=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'pal' ] ; then
+		pal="$config2" ; myecho "[dvd-slideshow] pal=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'ac3' ] ; then
+		ac3="$config2" ; myecho "[dvd-slideshow] ac3=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'copy' ] ; then
+		copy="$config2" ; myecho "[dvd-slideshow] copy=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'autocrop' ] ; then
+		autocrop="$config2" ; myecho "[dvd-slideshow] autocrop=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'font_dir' ] ; then
+		font_dir="$config2" ; myecho "[dvd-slideshow] font_dir=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'font1' ] ; then
+		font1="$config2" ; myecho "[dvd-slideshow] font1=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'font2' ] ; then
+		font2="$config2" ; myecho "[dvd-slideshow] font2=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'subtitle_font_size' ] ; then
+		subtitle_font_size="$config2" ; myecho "[dvd-slideshow] subtitle_font_size=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title1_font_size' ] ; then
+		title1_font_size="$config2" ; myecho "[dvd-slideshow] title1_font_size=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title2_font_size' ] ; then
+		title2_font_size="$config2" ; myecho "[dvd-slideshow] title2_font_size=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title1_bar_height' ] ; then
+		title1_bar_height="$config2" ; myecho "[dvd-slideshow] title1_bar_height=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title1_text_location_x' ] ; then
+		title1_text_location_x="$config2" ; myecho "[dvd-slideshow] title1_text_location_x=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title1_text_location_y' ] ; then
+		title1_text_location_y="$config2" ; myecho "[dvd-slideshow] title1_text_location_y=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title2_bar_location_y' ] ; then
+		title2_bar_location_y="$config2" ; myecho "[dvd-slideshow] title2_bar_location_y=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title2_bar_height' ] ; then
+		title2_bar_height="$config2" ; myecho "[dvd-slideshow] title2_bar_height=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title2_text_location_x' ] ; then
+		title2_text_location_x="$config2" ; myecho "[dvd-slideshow] title2_text_location_x=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	if [ "$config" == 'title2_text_location_y' ] ; then
+		title2_text_location_y="$config2" ; myecho "[dvd-slideshow] title2_text_location_y=$config2" 
+		line=$(($line+1)) ; continue
+	fi
+	########################################## end config
+
+	if [ `echo "$thisline" | awk -F: '{print NF}'` -eq 1 ] ; then
+		myecho "[dvd-slideshow] ERROR: Bad line $thisline"
+		myecho "[dvd-slideshow]        Check the syntax and try again."
+		cleanup; exit 1
+	fi
+	image[$i]=`echo "${thisline}" | cut -d: -f1`
+	filetype[$i]=`echo "${image[$i]}" | awk -F. '{print tolower($NF)}'`
+	duration[$i]=`echo "${thisline}" | cut -d: -f2`
+	subtitle[$i]=`echo "${thisline}" | cut -d: -f3`
+		
+	## check data file type and build arrays
+        # change "@_@" back to ":"
+        # - this should only be needed in subtitle
+        subtitle[$i]=`echo ${subtitle[$i]} | sed -e 's/@_@/:/g'`
+
+	effect1[$i]=`echo "${thisline}" | cut -d: -f4`
+	if [ "${filetype[$i]}" == 'musictitle' ] ; then
+		effect1_params[$i]=`echo "${thisline}" | cut -d: -f5`
+	else
+		effect1_params[$i]=`echo "${thisline}" | cut -d: -f5 | tr -d [:blank:]`
+	fi
+	effect2[$i]=`echo "${thisline}" | cut -d: -f6`
+	effect2_params[$i]=`echo "${thisline}" | cut -d: -f7 | tr -d [:blank:]`
+	effect3[$i]=`echo "${thisline}" | cut -d: -f8`
+	effect_params3[$i]=`echo "${thisline}" | cut -d: -f9 | tr -d [:blank:]`
+	effect4[$i]=`echo "${thisline}" | cut -d: -f10`
+	effect_params4[$i]=`echo "${thisline}" | cut -d: -f11 | tr -d [:blank:]`
+
+	if [ "${filetype[$i]}" == 'jpeg' ] || [ "${filetype[$i]}" == 'jpg' ] || [ "${filetype[$i]}" == 'png' ]; then
+		image_file[$i]=1 ; audio_file[$i]=0 ; avi_file[$i]=0
+                ## optinally copy images to new directory for backup onto dvd:
+                newname=`echo "${slideshow_name}" | sed -e 's/ /_/g'`
+                if [ "$copy" -eq 1 ] ; then
+                        mkdir -p "$outdir/$newname"_pics
+                fi
+                if [ "$copy" -eq 1 ] ; then
+                        cp "${image[$i]}" "$outdir/$newname"_pics
+                fi
+		duration_hu=`duration2hu ${duration[$i]}`
+		total_video_length="$(( $total_video_length + $duration_hu ))"
+        elif [ "${filetype[$i]}" == 'avi' ] ; then
+                image_file[$i]=0 ; audio_file[$i]=0 ; avi_file[$i]=1
+		### need to get the length of the video here and set the duration
+		### so the audio is the correct length!
+		checkforprog tcprobe
+        	video_length=`tcprobe -i "${image[$i]}" 2> /dev/null | grep 'duration=' | awk -F'duration=' '{print $2}'`
+		it=`hms2seconds "$video_length"`
+		it=`duration2hu $it`
+		duration[$i]="$it"
+        	myecho "[dvd-slideshow] AVI video length=$video_length duration=$it"
+		## optionally copy images to new directory for backup onto dvd:
+		newname=`echo "${slideshow_name}" | sed -e 's/ /_/g'`
+		if [ "$copy" -eq 1 ] ; then
+			mkdir -p "$outdir/$newname"_pics
+		fi
+		if [ "$copy" -eq 1 ] ; then
+			cp -af "${image[$i]}" "$outdir/$newname"_pics
+		fi
+	elif [ "${filetype[$i]}" == 'ogg' ] || [ "${filetype[$i]}" == 'mp3' ] || [ "${filetype[$i]}" == 'wav' ] || [ "${image[$i]}" == 'silence' ]; then
+		audio_inside_txtfile=1
+		audio_file[$i]=1 ; image_file[$i]=0 ; avi_file[$i]=0
+		effect1[$i]=`echo "${thisline}" | cut -d: -f3`  # no subtitle for audio 
+		effect1_params[$i]=`echo "${thisline}" | cut -d: -f4 | tr -d [:blank:]`
+		effect2[$i]=`echo "${thisline}" | cut -d: -f5`
+		effect2_params[$i]=`echo "${thisline}" | cut -d: -f6 | tr -d [:blank:]`
+		if [ "${effect1[$i]}" != 'fadein' ] && [ -n "${effect1[$i]}" ]; then
+			myecho "[dvd-slideshow] ERROR: First audio effect must be fadein"
+			cleanup; exit 1
+		fi
+		if [ "${effect2[$i]}" != 'fadeout' ] && [ -n "${effect2[$i]}" ]; then
+			myecho "[dvd-slideshow] ERROR: Second audio effect must be fadeout"
+			cleanup; exit 1
+		fi
+		## get audio track number:
+		if [ -z "${duration[$i]}" ] ; then 
+			# duration is the field for the audio track numuber
+			# if empty, assume track=1
+			audio_track[$i]='1'
+		elif [ "${duration[$i]}" -gt 2 ]; then
+			myecho "[dvd-slideshow] ERROR: Only 2 audio tracks supported at this time."
+			myecho "[dvd-slideshow]        Fix this audio file track number!"
+			cleanup; exit 1
+		else
+			# use the duration as the audio track number:
+			audio_track[$i]="${duration[$i]}"
+		fi
+		## get filetype:
+		if [ "${filetype[$i]}" == 'ogg' ] ; then
+			checkforprog oggdec
+		fi
+		if [ "${filetype[$i]}" == 'mp3' ] ; then
+			checkforprog lame
+		fi
+		duration[$i]=0
+		subtitle[$i]=''
+	else
+		image_file[$i]=0 ; audio_file[$i]=0 ; avi_file[$i]=0
+		duration_hu=`duration2hu ${duration[$i]}`
+		total_video_length="$(( $total_video_length + $duration_hu ))"
+	fi
+#	echo "line=$i"
+	line=$(( $line + 1 ))
+	i=$(( $i + 1 ))
+done
+
+## summarize configuration:
+[ "$pal" -eq 1 ] && ntsc_or_pal="PAL" || ntsc_or_pal="NTSC"
+[ "$ac3" -eq 1 ] && mp2_or_ac3="AC3" || mp2_or_ac3="MP2"
+#myecho "[dvd-slideshow] Configuration summary:"
+myecho "[dvd-slideshow] Video: $ntsc_or_pal  Audio: $mp2_or_ac3"
+myecho "[dvd-slideshow] Debug=$debug  Autocrop=$autocrop"
+
+## convert command-line audio files to wav format first, so we know how long they are:
+if [ -n "${audio[0]}" ] && [ $audio_inside_txtfile -eq 0 ] ; then  ## only command-line passed audio
+	total_audio_length=0
+	track=1 ; i=1
+	myecho "[dvd-slideshow] ############################################"
+	myecho "[dvd-slideshow] Decoding command-line passed audio files..."
+	for file in "${audio[@]}"; do
+		## verify files exist:
+		if [ ! -f "$file" ] ; then
+			myecho "[dvd-slideshow] ERROR: file $file does not exist."
+			cleanup ; exit 1
+		fi
+		suffix=`echo "$file" | awk -F. '{print tolower($NF)}'`
+		audio_index_padded=`addzeros "$i_audio"`
+		if [ "$suffix" == "mp3" ] ; then
+			myecho "[dvd-slideshow] decoding mp3 audio... we will splice it later."
+			lame --decode "$file" "$outdir/audio$track"_"$audio_index_padded.wav"
+		elif [ "$suffix" == "ogg" ] ; then
+			myecho "[dvd-slideshow] decoding ogg audio... we will splice it later."
+			oggdec --quiet -o "$outdir/audio$track"_"$audio_index_padded.wav" "$file"
+		elif [ "$suffix" == "wav" ] ; then
+			myecho "[dvd-slideshow] processing wav audio... we will splice it later."
+			cp "$file" "$outdir/audio$track"_"$audio_index_padded.wav"
+		else
+			myecho "[dvd-slideshow] ERROR:  Unknown audio file format.  Must be .mp3, .ogg, or .wav"
+		fi	
+		length=`wavlength "$outdir/audio$track"_"$audio_index_padded.wav"`
+		length_array[$i]=`hms $length`
+		total_audio_length="$(( $total_audio_length + $length ))"
+#		myecho "[dvd-slideshow] length=$length total_audio_length=$total_audio_length"
+		let i=$i+1
+		i_audio=$(( $i_audio + 1 ))
+	done
+#	i=1
+#	for file in "${audio[@]}"; do
+#		myecho "[dvd-slideshow] ${length_array[$i]} `basename \"$file\"`"
+#		let i=$i+1
+#	done
+	# estimate total audio length:
+	length_hms=`hms $total_audio_length`
+elif [ -n "${audio[0]}" ] && [ $audio_inside_txtfile -eq 1 ] ; then  ## only command-line passed audio
+	myecho "[dvd-slideshow] WARNING:  You specified audio on the command line, and"
+	myecho "[dvd-slideshow]           you have audio files inside your input .txt file"
+	myecho "[dvd-slideshow]           ...Ignoring command-line passed audio!"
+fi
+
+video_time_hms=`hms $total_video_length`
+myecho "[dvd-slideshow] ############################################"
+#myecho "[dvd-slideshow] Total audio length = $length_hms"
+myecho "[dvd-slideshow] Total video length = $video_time_hms"
+myecho "[dvd-slideshow] ############################################"
+
+if [ $debug -ge 3 ] ; then
+	echo "outdir=$outdir"
+	echo "time_per_picture=$time_per_picture"
+	echo "pal=$pal"
+	echo "audio files:"
+	echo "${audio[@]}"
+	echo "image files:" 
+	echo "${image[@]}" 
+	echo "image files:" 
+	echo "${image_file[@]}" 
+	echo "audio files:" 
+	echo "${audio_file[@]}" 
+	echo "duration:" 
+	echo "${duration[@]}" 
+	echo "subtitle:" 
+	echo "${subtitle[@]}" 
+	echo "effect:" 
+	echo "${effect1[@]}" 
+	echo "effect1_params:" 
+	echo "${effect1_params[@]}" 
+fi
+
+
+if [ ! -d "$outdir" ] ; then	
+#        echo "ERROR... output directory does not exist!"
+#        exit
+	echo "creating directory $outdir"
+	mkdir -p "$outdir"  # create directory
+fi
+
+if [ "$pal" -eq 1 ] ; then
+	framerate='25'
+	frames_per_sec=2500  # in 1/100ths of a second
+	if [ "$low_quality" -eq 1 ] ; then
+		width='352' ; height='288'
+		resolution='352x288'
+	elif [ "$medium_quality" -eq 1 ] ; then
+		width='352' ; height='288'
+		resolution='352x288'
+	else
+		width='720' ; height='576'
+		resolution='720x576'
+	fi
+else
+	framerate='29.97'
+	frames_per_sec=2997  # in 1/100ths of a second
+	if [ "$low_quality" -eq 1 ] ; then
+		width='352' ; height='240'
+		resolution='352x240'
+	elif [ "$medium_quality" -eq 1 ] ; then
+		width='352' ; height='240'
+		resolution='352x240'
+	else
+		width='720' ; height='480'
+		resolution='720x480'
+	fi
+fi
+
+has_subtitles=0
+frame_time=0
+total_slideshow_frames=0
+
+if [ "$low_quality" -eq 1 ] || [ "$medium_quality" -eq 1 ] ; then
+	## font sizes:
+	subtitle_font_size=$(( $subtitle_font_size / 2 ))
+	title1_font_size=$(( $title1_font_size / 2 ))
+	title2_font_size=$(( $title2_font_size / 2 ))
+	## top title:
+	title1_bar_height=$(( $title1_bar_height / 2 ))
+	title1_text_location_x=$(( $title1_text_location_x / 2 ))
+	title1_text_location_y=$(( $title1_text_location_y / 2 ))
+	# bottom title:
+	title2_bar_location_y=$(( $title2_bar_location_y / 2 ))
+	title2_bar_height=$(( $title2_bar_height / 2 ))
+	title2_text_location_x=$(( $title2_text_location_x / 2 ))
+	title2_text_location_y=$(( $title2_text_location_y / 2 ))
+fi
+if [ "$low_quality" -eq 1 ] ; then
+	myecho "[dvd-slideshow] WARNING: Using low-quality mode.  Audio and chapter"
+	myecho "[dvd-slideshow]   timings may be off.  This mode is for testing only."
+	myecho "[dvd-slideshow]   output resolution is $width"x"$height"
+	myecho "[dvd-slideshow]   Ignore the '++WARN: [mpeg2enc]' lines"
+elif [ "$medium_quality" -eq 1 ] ; then
+	myecho "[dvd-slideshow] Using medium-quality mode.  "
+	myecho "[dvd-slideshow]   output resolution is $width"x"$height"
+	myecho "[dvd-slideshow]   Ignore the '++WARN: [mpeg2enc]' lines"
+fi
+
+if [ "$browsable" -eq 1 ] || [ $chapmenu -eq 1 ] ; then
+	make_arrows # for future menu usage
+fi
+
+orig_slideshow_name="${slideshow_name}"
+slideshow_name=`echo "${slideshow_name}" | sed -e 's/ /_/g'`
+if [ "$orig_slideshow_name" != "$slideshow_name" ] ; then
+	myecho "[dvd-slideshow] Output filename is $slideshow_name"
+fi
+
+## make both a slideshow_background file and a title_background file
+background "$bgfile"
+if [ -f "${bgfile}" ] ; then
+	background "$bgfile"
+else
+	background "black"
+fi
+
+# create the mpeg2enc pipeline here if we are in $yuvcat mode
+if [ "$yuvcat" -eq 1 ]; then
+       # create the fifo
+       rm -f $yuvfifo
+       mkfifo $yuvfifo
+
+       # start the mpeg encoder, listening to the fifo, and keep the pid for later
+#       mpeg2enc -v $verbosity -a 2 -q 4 -s -M 3 -f 8 -o "$outdir/video.mpg" <$yuvfifo &
+       mpeg2enc -v $verbosity -q 4 -4 2 -2 1 -a 2 -M 2 -f 8 -o "$outdir/video_"$mpegid".mpg" <$yuvfifo &
+       yuvpid=$!
+
+       # open the fifo for writing as fd 55 (unlikely to be used!)
+       exec 55>$yuvfifo
+fi
+
+
+let i=0 # full
+let v=0 # vob
+for file in "${image[@]}"; do
+#	myecho "[dvd-slideshow]########################################"
+	## convert i to a 2-digit text version so we can cat the mpgs together
+	## in the correct order easily:
+	di=`addzeros $i`
+
+	## autocrop
+	do_autocrop=0
+	if [ "$autocrop" -eq 1 ] && [ ${image_file[$i]} -eq 1 ] ; then
+		## get width and height of the image:
+		image_width="`imagewidth "${file}"`"
+		image_height="`imageheight "${file}"`"
+#		myecho "[dvd-slideshow] image_width=$image_width image_height=$image_height"
+		ratio=$(( 100* $image_width / $image_height ))
+		out_ratio=$(( 100* $width / $height ))
+#		echo "out_ratio=$out_ratio"
+		## common aspect ratios:
+		## 720x480 = 1.5
+		## 2048x1536 = 1.33 [Canon digital camera]
+		## 	= film
+#		myecho "[dvd-slideshow] aspect ratio=$ratio"
+		if [ "$ratio" -lt "$(( $out_ratio + 30 ))" ] && [ "$ratio" -gt $(( $out_ratio - 30 )) ] ; then
+			do_autocrop=1
+		else
+			do_autocrop=0
+		fi
+	fi
+
+	#######################################################################
+	## loop over effects that get applied to pictures before other effects:
+	## do not use this!! It may be taken out at any time. (because the code is really ugly)
+	## I encourage you to rotate your pictures before you use this script!
+	for e in `seq 2 -1 1`; do
+		if [ "$e" -eq 1 ] ; then
+			this_effect="${effect1[$i]}"
+			this_effect_params="${effect1_params[$i]}"
+		elif [ "$e" -eq 2 ] ; then
+			this_effect="${effect2[$i]}"
+			this_effect_params="${effect2_params[$i]}"
+		fi
+#		echo "effect=$this_effect params=$this_effect_params"
+		## rotate image first, then apply other effects?
+		if [ "${image_file[$i]}" -eq 1 ] && [ "$this_effect" == 'rotate' ] ; then  #############
+			## use real jpeg.  Rotate image!
+			myecho "[dvd-slideshow] Rotating picture"
+#			echo "file=$file $outdir/temp.jpg"
+			convert -rotate $this_effect_params \"${file}\" "$outdir"/temp.jpg
+			file="$outdir"/temp.jpg
+			if [ "$e" -eq 1 ] ; then
+				effect1[$i]="${effect2[$i]}"
+				effect1_params[$i]="${effect2_params[$i]}"
+				effect2[$i]=''
+				effect2_params[$i]=''
+			elif [ "$e" -eq 2 ] ; then
+				effect2[$i]=''
+				effect2_params[$i]=''
+			fi
+		fi
+	done
+	#######################################################################
+	
+	if [ "${duration[$i]}" == 'audio' ] ; then
+		## make the duration the length of the last audio track
+		if [ -z "$song_length_hu" ] ; then
+			echo '# ERROR: You must have an audio track before a slide specifying "audio"'
+			cleanup; exit 1
+		fi
+		duration[$i]="$song_length"	# in seconds
+	fi	
+
+	if [ -z "${duration[$i]}" ] ; then
+		myecho "[dvd-slideshow] WARNING:  No duration specified for ${image[$i]}"
+		myecho "[dvd-slideshow]	     Using default duration of 5 seconds"
+		duration[$i]=5
+	fi
+
+	duration[$i]=`duration2hu ${duration[$i]}`  # duration in hundreths of a sec.
+	
+	## number of frames to render for this picture:
+	frames=$(( $frames_per_sec * ${duration[$i]} / 100 / 100 ))
+	## get start frame & time:
+	slide_start_frame=$(( $total_slideshow_frames + 1 ))
+	slide_start_time=$(( $slide_start_frame *100 * 100 / $frames_per_sec )) ## in hundreths of a sec.
+	slide_start_hms=`hms "$slide_start_time"`
+	if [ $debug -ge 1 ] ; then
+		myecho "[dvd-slideshow] start_frame_number=$slide_start_frame slide_start_time=$slide_start_hms"
+	fi
+	if [ -n ${duration[$i]} ] && [ ${duration[$i]} -ne 0 ] ; then
+		myecho "[dvd-slideshow] Working on $i/${#image[@]} $file, `hms ${duration[$i]}`"
+	else
+		myecho "[dvd-slideshow] Working on $i/${#image[@]} $file"
+	fi
+	if [ $debug -ge 1 ] ; then
+		myecho "[dvd-slideshow] effect='${effect1[$i]}' effect_params='${effect1_params[$i]}'"
+		myecho "[dvd-slideshow] frames=$frames duration=`echo ${duration[$i]} | tr -d [:blank:]` hundredths of a second"
+	fi
+	if [ "$file" == 'title' -o "$file" == 'Title' ] ; then
+		## add the first title page:  ########################################
+		myecho "[dvd-slideshow] Making title slide:"
+		title1="${subtitle[$i]}"
+		subtitle[$i]=''  # set subtitle to nothing so we don't get a subtitle
+		title2="${effect1[$i]}"	
+		myecho "[dvd-slideshow] 	Title1=$title1"
+		myecho "[dvd-slideshow] 	Title2=$title2"
+		## now the slide may already exist if we had a fadein or crossfade before
+		if [ ! -f "$outdir/slide_$i.ppm" ] ; then 
+			titleslide "$title1" "$title2"
+			waitforfile "$outdir/title.ppm"
+			cp "$outdir/title.ppm" "$outdir/slide_$i.ppm"
+		fi
+		encode
+		write_chap=1
+		myecho "[dvd-slideshow]########################################"
+	elif [ "$file" == 'musictitle' ] ; then
+		## add a music-video style title page
+		## format is:
+		## musictitle:duration:subtitle:MusicTitle:MusicArtist;MusicAlbum
+		myecho "[dvd-slideshow] Making musictitle slide:"
+		Title="Title: ${effect1[$i]}"
+		Artist="Artist: `echo ${effect1_params[$i]} | awk -F';' '{print $1}'`"
+		Album="Album: `echo ${effect1_params[$i]} | awk -F';' '{print $2}'`"
+		myecho "[dvd-slideshow] $Title $Artist $Album"
+		# make the background (black) picture:
+		convert -size "$resolution" xc:black -type TrueColor \
+			-depth 8 "$outdir"/slideshow_background.ppm
+		# draw text:
+		if [ "$low_quality" -eq 1 ] || [ "$medium_quality" -eq 1 ] ; then
+			convert -depth 8 -size $resolution xc:transparent \
+			-pointsize $subtitle_font_size -gravity SouthWest $font \
+			-draw "fill white text 40,100 \"$Title\"" \
+			-draw "fill white text 40,75 \"$Artist\"" \
+			-draw "fill white text 40,50 \"$Album\"" "$outdir/dvd_title.png"
+		else
+			convert -depth 8 -size $resolution xc:transparent \
+			-pointsize $subtitle_font_size -gravity SouthWest $font \
+			-draw "fill white text 80,200 \"$Title\"" \
+			-draw "fill white text 80,150 \"$Artist\"" \
+			-draw "fill white text 80,100 \"$Album\"" "$outdir/dvd_title.png"
+		fi
+		composite -type TrueColor -depth 8 "$outdir/dvd_title.png" "$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"
+#		cp "$outdir/slide_$i.ppm" "$outdir/temp_slideshow_image.ppm"
+#		subtitle[$i]=''  # set subtitle to nothing so we don't get a subtitle
+		encode
+		write_chap=1
+		myecho "[dvd-slideshow]########################################"
+        elif [ "${avi_file[$i]}" -eq 1 ] ; then  ############################
+		## use ffmpeg to encode video.  No audio.  
+		## maybe I'll add support for this later.
+		myecho "[dvd-slideshow] AVI file passed.  Closing existing pipe to video_$mpegid.mpg"
+                write_chap=1
+                new_vob=1
+                # No browse nums yet
+       		# just close the fifo and wait for the encoder to finish
+	        echo '[dvd-slideshow] waiting for mpeg2enc to finish...'
+	        exec 55>&-  # close pipe to mpeg2enc
+	        wait $yuvpid
+#	        yuvpid=0
+		## increment mpeg id number:
+		mpegid=$(( $mpegid + 1 ))
+		## encode video
+		myecho "[dvd-slideshow] Encoding ${image[$i]} to video_$mpegid.mpg"
+		ffmpeg -i "${image[$i]}" -y -aspect 4:3 -s "$width"x"$height" -r $framerate -vcodec mpeg2video -an video_$mpegid.mpg
+		## start a new mpeg2enc pipe
+		mpegid=$(( $mpegid + 1 ))
+	        # create the fifo
+	        rm -f $yuvfifo
+		yuvfifo=/tmp/dvdss-pipe-$!   # pipe to mpeg2enc process
+	        mkfifo $yuvfifo
+	        # start the mpeg encoder, listening to the fifo, and keep the pid for later
+		myecho "[dvd-slideshow] Opening new pipe to video_$mpegid.mpg"
+	        mpeg2enc -v $verbosity -q 4 -4 2 -2 1 -a 2 -M 2 -f 8 -o "$outdir/video_"$mpegid".mpg" <$yuvfifo &
+	        yuvpid=$!
+	        # open the fifo for writing as fd 55 (unlikely to be used!)
+	        exec 55>$yuvfifo
+               	yuvfirstfile=1  # must not strip off headers for first frame of each video?
+		myecho "[dvd-slideshow]########################################"
+	elif [ "${image_file[$i]}" -eq 1 ] && [ -z "${effect1[$i]}" ] ; then  ############################
+		## use real jpeg. 
+		## now the slide may already exist if we had a fadein or crossfade before
+		if [ ! -f "$outdir/slide_$i.ppm" ] ; then 
+			if [ "$do_autocrop" -eq 1 ] ; then
+				convert -resize "$width"x -type TrueColor -depth 8 \
+				-gravity center -crop "$width"x"$height"'+0!+0!' "${file}" miff:- | \
+				composite -gravity center -type TrueColor -depth 8 \
+				- "$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"
+			else
+				convert -resize $resolution -type TrueColor -depth 8 "${file}" miff:- | \
+				composite -gravity center -type TrueColor -depth 8 \
+				- "$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"
+			fi
+		fi
+		encode
+		write_chap=1
+		new_vob=1
+		## write out a test browsable image:
+#		if [ "$browsable" -eq 1 ] ; then
+#			myecho "[dvd-slideshow] exporting browsable image"
+#			if [ "$browse_num" -eq 0 ] ; then
+#				# only add up and right arrows
+#				composite -dissolve 25 "$outdir"/right_arrow.png "$outdir/slide_$i.ppm" "$outdir/temp.ppm"
+#				composite -dissolve 25 "$outdir"/up_arrow.png "$outdir/temp.ppm" "$outdir/slide_nav_$di.ppm"
+#			else
+#				# only add up and right arrows
+#				composite -dissolve 25 "$outdir"/right_arrow.png "$outdir/slide_$i.ppm" "$outdir/temp.ppm"
+#				composite -dissolve 25 "$outdir"/left_arrow.png "$outdir/temp.ppm" "$outdir/temp.ppm"
+#				composite -dissolve 25 "$outdir"/up_arrow.png "$outdir/temp.ppm" "$outdir/slide_nav_$di.ppm"
+#			fi
+#				if [ "$debug" -ge 1 ] ; then echo "browse_num=$browse_num" ; fi
+#				fixedslide[$browse_num]="slide_nav_$di.ppm"	## set up for output array
+#				browse_num=$(( $browse_num + 1 ))
+#		fi
+		myecho "[dvd-slideshow]########################################"
+	elif [ "$file" == 'fadein' ] ; then 
+		## ok, let's copy the background and just fade the foreground:
+		## check to make sure the next slide is an image:
+#		myecho "[dvd-slideshow] Doing fadeIN...."
+		if [ "${image[$i+1]}" == 'crossfade' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot fadein to a crossfade!"
+			cleanup; exit 1
+		fi
+		if [ "${image[$i+1]}" == 'fadein' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot fadein to another fadein!"
+			cleanup; exit 1
+		fi
+		nextslide=`nextslidename`
+		increment=`nextslideincrement`
+		check_rm "$outdir/slide_$(($i+1)).ppm"  # make sure it doesn't already exist!
+#		myecho "[dvd-slideshow] next slide=$nextslide  increment=$increment"
+		## we need to prepare the NEXT image now:
+		if [ "${effect1[$i+$increment]}" == 'crop' ] ; then  # if next picture is specifically cropped
+			window=`echo "${effect1_params[$i+$increment]}" | awk -F';' '{print $1";"$2}'`
+			parse_window "$window" "${image[$i+$increment]}"
+			x_width=$(( $x1 - $x0 )) ; y_height=$(( $y1 - $y0 ))
+			mycrop  # takes the parameters from <parse_window> and returns: 
+			convert "${image[$i+$increment]}" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution miff:- | \
+			composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "${effect1[$i+$increment]}" == 'kenburns' ] ; then  # if next picture has kenburns effect
+			window=`echo "${effect1_params[$i+$increment]}" | awk -F';' '{print $1";"$2}'`
+			parse_window "$window" "${image[$i+$increment]}"
+			x_width=$(( $x1 - $x0 )) ; y_height=$(( $y1 - $y0 ))
+			mycrop  # takes the parameters from <parse_window> and returns: 
+			convert "${image[$i+$increment]}" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution miff:- | \
+			composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "$nextslide" == 'title' ] || [ "$nextslide" == 'Title' ] ; then
+#			myecho "[dvd-slideshow] Making title slide for fadein:"
+			title1="${subtitle[$i+$increment]}"
+#			subtitle[$i+$increment]=''  # set subtitle to nothing so we don't get a subtitle
+			title2="${effect1[$i+$increment]}"	
+			titleslide "$title1" "$title2"
+			waitforfile "$outdir/title.ppm"
+			composite -gravity center -type TrueColor -depth 8 "$outdir"/title.ppm "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "$nextslide" == 'background' ] && [ "${duration[$i+$increment]}" -ne 0 ] ; then
+			bg="${effect1[$i+$increment]}"
+			background "$bg"   # calls the background image subroutine
+			cp "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "${effect1[$i+$increment]}" == 'scroll' ] ; then  # if next picture has scroll effect
+                       # Resize the image first
+                       image_width="`imagewidth "${image[$i+$increment]}"`"
+                       image_height="`imageheight "${image[$i+$increment]}"`"
+                       ## calculate frame size after adding black side bars for portrait pictures:
+                       if [ $image_width -gt $image_height ] ; then
+                               # landscape: 
+                               convert -resize x$height "${image[$i+$increment]}" -type TrueColor -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc           
+                       else
+                               # portrait: 
+                               convert -resize "$width" "${image[$i+$increment]}" -type TrueColor -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc           
+                       fi
+                       # now the image is scaled correctly
+                       image_width="`imagewidth "$outdir/temp_slideshow_image_scaled.mpc"`"
+                       image_height="`imageheight "$outdir/temp_slideshow_image_scaled.mpc"`"
+                       [ "$debug" -ge 1 ] && echo "[dvd-slideshow] image_width=$image_width image_height=$image_height"
+                       if [ "${effect1_params[$i+$increment]}" == 'right' ] ; then
+                               x0=0 ; y0=0
+                               x1="$width"; y1="$image_height"
+                       elif [ "${effect1_params[$i+$increment]}" == 'left' ] ; then
+                               x0=$(( $image_width - $width )) ; y0=0
+                               x1="$image_width"; y1="$image_height"
+                       elif [ "${effect1_params[$i+$increment]}" == 'up' ] ; then
+                               x0=0 ; y0=$(( $image_height - $height )) 
+                               x1="$image_width"; y1="$image_height"
+                       elif [ "${effect1_params[$i+$increment]}" == 'down' ] ; then
+                               x0=0 ; y0=0
+                               x1="$image_width"; y1="$height"
+                       else
+                               echo "[dvd-slideshow] ERROR: bad effect parameters ${effect1_params[$i]}"
+                               cleanup; exit 1
+                       fi
+                       xi=0 ; yi=0     
+                       mycrop
+                       convert "$outdir/temp_slideshow_image_scaled.mpc" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution miff:- | \
+                       composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		else # no manual cropping next picture and it's not a title or background
+			do_next_autocrop=0
+			if [ "$autocrop" -eq 1 ] ; then    # do autocrop
+				## get width and height of the image:
+				image_width="`imagewidth "${image[$(($i+$increment))]}"`"
+				image_height="`imageheight "${image[$(($i+$increment))]}"`"
+				ratio=$(( 100* $image_width / $image_height ))
+				out_ratio=$(( 100* $width / $height ))
+				if [ "$ratio" -lt "$(( $out_ratio + 30 ))" ] && [ "$ratio" -gt $(( $out_ratio - 30 )) ] ; then
+					do_next_autocrop=1
+				else
+					do_next_autocrop=0
+				fi
+			fi
+			if [ "$do_next_autocrop" -eq 1 ] ; then
+				convert -resize "$width"x -type TrueColor -depth 8 \
+				-gravity center -crop "$width"x"$height"'+0!+0!' "${image[$(($i+$increment))]}" miff:- | \	
+				composite -gravity center -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+			else
+				convert "${image[$(($i+$increment))]}" -resize $resolution -type TrueColor -depth 8 miff:- | \
+				composite -gravity center -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+			fi
+		fi
+
+		[ "$frames" -lt 45 ] && stepsize=1 || stepsize=2 
+		if [ "$low_quality" -eq 1 ] ; then
+			stepsize=5
+		fi
+		## convert ppm to mpc for better speed:
+		convert "$outdir/slide_$(($i+1)).ppm" -type TrueColor -depth 8 "$outdir/slide_$(($i+1)).mpc"
+		## do two frames each loop so it's faster?
+		myechon  "[dvd-slideshow]"
+		lastbar=0
+		for fr in `seq 1 $stepsize $frames`; do
+			dj=`addzeros $fr`
+			percent=$(( 100 * $fr / $frames ))
+			thisbar=$(( $fr * 39 / $frames ))
+			if [ "$thisbar" -gt "$lastbar" ] ; then
+				delta=$(( $thisbar - $lastbar ))
+				if [ "$delta" -eq 1 ] ; then 
+					myechon "#"
+				elif [ "$delta" -eq 2 ] ; then
+					myechon "##"
+				else 
+					myechon "###"
+				fi
+				lastbar="$thisbar"
+			fi
+			(composite -gravity center -type TrueColor -depth 8 -dissolve $percent \
+			"$outdir/slide_$(($i+1)).mpc" "$outdir/slideshow_background.ppm" "$outdir/fade_$dj.ppm" ; extracopies $fr $frames ) &
+#			last_fade="$!"
+		done
+#		if [ -n "`ps --no-headers $last_fade`" ] ; then
+#			wait "$last_fade"
+#		fi
+		waitforfiles "$outdir/fade" $dj
+		encode_fade
+		myecho '#'
+		rm "$outdir"/fade_????.ppm
+	elif [ "$file" == 'crossfade' ] ; then  #############################################
+		## ok, for crossfades, we need to fade both the foreground and background.
+		## check to make sure the next slide is an image:
+		## now make this get the last real image and the next real image
+		## get next image:
+		nextslide=`nextslidename`
+		increment=`nextslideincrement`
+		check_rm "$outdir/slide_$(($i+1)).ppm"  # make sure it doesn't already exist!
+#		check_rm "$outdir/slide_$(($i+1)).cache"  # make sure it doesn't already exist!
+#		myecho "[dvd-slideshow] next slide=$nextslide  increment=$increment"
+		## last slide is slide_$(($i-1)).ppm (already rendered)
+		## we need to prepare the NEXT image now:
+		if [ "${effect1[$i+$increment]}" == 'crop' ] ; then  # if next picture is specifically cropped
+			window=`echo "${effect1_params[$i+$increment]}" | awk -F';' '{print $1";"$2}'`
+			parse_window "$window" "${image[$i+$increment]}"
+			x_width=$(( $x1 - $x0 )) ; y_height=$(( $y1 - $y0 ))
+			mycrop  # takes the parameters from <parse_window> and returns: 
+			convert "${image[$i+$increment]}" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution -type TrueColor miff:- | \
+			composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "${effect1[$i+$increment]}" == 'kenburns' ] ; then  # if next picture has kenburns effect
+			window=`echo "${effect1_params[$i+$increment]}" | awk -F';' '{print $1";"$2}'`
+			parse_window "$window" "${image[$i+$increment]}"
+			x_width=$(( $x1 - $x0 )) ; y_height=$(( $y1 - $y0 ))
+			mycrop  # takes the parameters from <parse_window> and returns: 
+			convert "${image[$i+$increment]}" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution miff:- | \
+			composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "${effect1[$i+$increment]}" == 'scroll' ] ; then  # if next picture has scroll effect
+                       # Resize the image first
+                       image_width="`imagewidth "${image[$i+$increment]}"`"
+                       image_height="`imageheight "${image[$i+$increment]}"`"
+                       ## calculate frame size after adding black side bars for portrait pictures:
+                       if [ $image_width -gt $image_height ] ; then
+                               # landscape: 
+                               convert -resize x$height "${image[$i+$increment]}" -type TrueColor -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc           
+                       else
+                               # portrait: 
+                               convert -resize "$width" "${image[$i+$increment]}" -type TrueColor -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc           
+                       fi
+                       # now the image is scaled correctly
+                       image_width="`imagewidth "$outdir/temp_slideshow_image_scaled.mpc"`"
+                       image_height="`imageheight "$outdir/temp_slideshow_image_scaled.mpc"`"
+                       [ "$debug" -ge 1 ] && echo "[dvd-slideshow] image_width=$image_width image_height=$image_height"
+                       if [ "${effect1_params[$i+$increment]}" == 'right' ] ; then
+                               x0=0 ; y0=0
+                               x1="$width"; y1="$image_height"
+                       elif [ "${effect1_params[$i+$increment]}" == 'left' ] ; then
+                               x0=$(( $image_width - $width )) ; y0=0
+                               x1="$image_width"; y1="$image_height"
+                       elif [ "${effect1_params[$i+$increment]}" == 'up' ] ; then
+                               x0=0 ; y0=$(( $image_height - $height )) 
+                               x1="$image_width"; y1="$image_height"
+                       elif [ "${effect1_params[$i+$increment]}" == 'down' ] ; then
+                               x0=0 ; y0=0
+                               x1="$image_width"; y1="$height"
+                       else
+                               echo "[dvd-slideshow] ERROR: bad effect parameters ${effect1_params[$i]}"
+                               cleanup; exit 1
+                       fi
+                       xi=0 ; yi=0     
+                       mycrop
+                       convert "$outdir/temp_slideshow_image_scaled.mpc" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution miff:- | \
+                       composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "${image[$i+1]}" == 'crossfade' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot crossfade to another crossfade!"
+			cleanup; exit 1
+		elif [ "${image[$i+1]}" == 'fadeout' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot crossfade to a fadeout!"
+			cleanup; exit 1
+		elif [ "${image[$i+1]}" == 'fadein' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot crossfade to a fadein!"
+			cleanup; exit 1
+		elif [ "$nextslide" == 'title' ] || [ "$nextslide" == 'Title' ] ; then
+#			myecho "[dvd-slideshow] Making title slide for fadein:"
+			title1="${subtitle[$i+$increment]}"
+#			subtitle[$i+$increment]=''  # set subtitle to nothing so we don't get a subtitle
+			title2="${effect1[$i+$increment]}"	
+			titleslide "$title1" "$title2"
+			waitforfile "$outdir/title.ppm"
+			composite -gravity center -type TrueColor -depth 8 "$outdir"/title.ppm "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		elif [ "$nextslide" == 'background' ] && [ "${duration[$i+$increment]}" -ne 0 ] ; then
+			bg="${effect1[$i+$increment]}"
+			background "$bg"   # calls the background image subroutine
+			cp "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+		else # no manual cropping next picture and it's not a title
+			do_next_autocrop=0
+			if [ "$autocrop" -eq 1 ] ; then # check to see if we neet to crop the next picture
+				## get width and height of the image:
+				image_width="`imagewidth "$nextslide"`"
+				image_height="`imageheight "$nextslide"`"
+				ratio=$(( 100* $image_width / $image_height ))
+				out_ratio=$(( 100* $width / $height ))
+				if [ "$ratio" -lt "$(( $out_ratio + 30 ))" ] && [ "$ratio" -gt $(( $out_ratio - 30 )) ] ; then
+					do_next_autocrop=1
+				else
+					do_next_autocrop=0
+				fi
+			fi
+			if [ "$do_next_autocrop" -eq 1 ] ; then
+				convert -resize "$width"x -type TrueColor -depth 8 \
+				-gravity center -crop "$width"x"$height"'+0!+0!' "${image[$(($i+$increment))]}" miff:- | \
+				composite -gravity center -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+			else
+				convert "${image[$(($i+$increment))]}" -resize $resolution -type TrueColor -depth 8 miff:- | \
+				composite -gravity center -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$(($i+1)).ppm"
+			fi
+		fi	
+		## now do actual crossfade
+		[ "$frames" -lt 45 ] && stepsize=1 || stepsize=2 
+		if [ "$low_quality" -eq 1 ] ; then
+			stepsize=5
+		fi
+		## convert ppm to mpc for better speed?:
+#		convert "$outdir/slide_$(($i+1)).ppm" -type TrueColor -depth 8 "$outdir/slide_$(($i+1)).mpc"
+		lastslide="`previousslideppm`"
+#		convert "$lastslide" -type TrueColor -depth 8 "$outdir/temp_slideshow_image.mpc"
+		myechon "[dvd-slideshow]"
+		lastbar=0
+		## do two frames each loop so it's faster?
+		for fr in `seq 1 $stepsize $frames`; do
+			dj=`addzeros $fr`
+			percent=$(( 100 * $fr / $frames ))
+			thisbar=$(( $fr * 39 / $frames ))
+			if [ "$thisbar" -gt "$lastbar" ] ; then
+				delta=$(( $thisbar - $lastbar ))
+				if [ "$delta" -eq 1 ] ; then 
+					myechon "#"
+				elif [ "$delta" -eq 2 ] ; then
+					myechon "##"
+				else 
+					myechon "###"
+				fi
+				lastbar="$thisbar"
+			fi
+			(composite -gravity center -type TrueColor -depth 8 -dissolve $percent \
+			"$outdir/slide_$(($i+1)).ppm" "$lastslide" "$outdir/fade_$dj.ppm" ; extracopies $fr $frames ) &
+			last_fade="$!"
+		done
+#		if [ -n "`ps --no-headers $last_fade`" ] ; then
+#			wait "$last_fade"
+#		fi
+		waitforfiles "$outdir/fade" $dj
+		encode_fade
+		myecho "#"
+		rm "$outdir"/fade_????.ppm
+	elif [ "$file" == 'fadeout' ] ; then  #############################################
+		## ok, let's copy the background and just fade the foreground:
+		## number of frames to render is $frames
+#		myecho "[dvd-slideshow] Doing fadeOUT to background...."
+		## get last slide first?
+		lastslide="`previousslideppm`"
+		[ "$frames" -lt 45 ] && stepsize=1 || stepsize=2 
+		if [ "$low_quality" -eq 1 ] ; then
+			stepsize=5
+		fi
+		if [ ! -f "$lastslide" ] ; then
+			myecho "[dvd-slideshow] ERROR: $lastslide doesn't exist!"
+			myecho "[dvd-slideshow]        you probably are fading without having"
+			myecho "[dvd-slideshow]        specified a real image first."
+			cleanup; exit 1
+		fi
+		if [ "${image[$i+1]}" == 'crossfade' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot fadeout to a crossfade!"
+			cleanup; exit 1
+		fi
+		if [ "${image[$i+1]}" == 'fadeout' ] ; then
+			myecho "[dvd-slideshow] ERROR: Cannot fadeout to another fadeout!"
+			cleanup; exit 1
+		fi
+		convert "$lastslide" "$outdir/temp_slideshow_image.mpc"
+		myechon "[dvd-slideshow]"
+		lastbar=0
+		for fr in `seq 1 $stepsize $frames`; do
+			dj=`addzeros $fr`
+			percent=$(( 100 - 100 * $fr / $frames ))
+			thisbar=$(( $fr * 39 / $frames ))
+			if [ "$thisbar" -gt "$lastbar" ] ; then
+				delta=$(( $thisbar - $lastbar ))
+				if [ "$delta" -eq 1 ] ; then 
+					myechon "#"
+				elif [ "$delta" -eq 2 ] ; then
+					myechon "##"
+				else 
+					myechon "###"
+				fi
+				lastbar="$thisbar"
+			fi
+			(composite -gravity center -type TrueColor -depth 8 -dissolve $percent \
+			"$outdir/temp_slideshow_image.mpc" "$outdir/slideshow_background.ppm" "$outdir/fade_$dj.ppm" ; extracopies $fr $frames ) &
+#			last_fade="$!"
+		done
+#		if [ -n "`ps --no-headers $last_fade`" ] ; then
+#			wait "$last_fade"
+#		fi
+		waitforfiles "$outdir/fade" $dj
+		encode_fade
+		myecho "#"
+		rm "$outdir"/fade_????.ppm
+	elif [ "${image_file[$i]}" -eq 1 ] && [ "${effect1[$i]}" == 'crop' ] ; then  ######################
+#		myecho "[dvd-slideshow] Cropping picture"
+		## now the slide may already exist if we had a fadein or crossfade before
+		if [ ! -f "$outdir/slide_$i.ppm" ] ; then 
+			window=`echo "${effect1_params[$i]}" | awk -F';' '{print $1";"$2}'`
+			parse_window "$window" "$file"
+			x_width=$(( $x1 - $x0 )) ; y_height=$(( $y1 - $y0 ))
+			## now these coordinates are relative to the original image size, buffered out to
+			## the output dvd aspect ratio:
+			[ "$debug" -ge 2 ] && myecho "[dvd-slideshow] $x0,$y0 ; $x1,$y1 width=$x_width height=$y_height xi=$xi yi=$yi"
+			mycrop  # takes the parameters from <parse_window> and returns: 
+			[ $debug -ge 2 ] && myecho "[dvd-slideshow] c_width=$c_width c_height=$c_height xc0=$xc0 yc0=$yc0 xci=$xci yci=$yci" 
+			## now, do the actual crop:
+			convert "${file}" -crop "$c_width"x"$c_height+$xc0+$yc0" -resize $resolution -type TrueColor miff:- | \
+			composite -geometry "+$xci+$yci" -type TrueColor -depth 8 - "$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"
+		fi
+		encode
+		write_chap=1
+		new_vob=1
+		myecho "[dvd-slideshow]########################################"
+	elif [ "${effect1[$i]}" == 'kenburns' ] ; then
+		## Ken Burns effect from starting point to ending point
+#		myecho "[dvd-slideshow] Doing KenBurns Effect...."
+#		myecho "[dvd-slideshow] This is very slow since it needs to work in all cases."
+#		myecho "[dvd-slideshow] Use the faster scroll options for scrolling left/right/up/down."
+		# x0,y0 is the top left corner of the image
+		# x1,y1 is the bottom right corner of the image
+		# xs0,ys1 is the starting point for the top left corner, etc
+		# xe1,ye1 is the ending point for the bottom right corner
+		# textfile format is:  
+		# file:duration:comment:kenburns:xs0,ys0;xs1,ys1;xe0,ye0;xe1,ye1
+		myecho "[dvd-slideshow] Kenburns ${effect1_params[$i]}"
+
+		## now, the process should go as follows:
+		## 1. figure out the start and end locations of the kenburns effect
+		##	in the coordinate system of the "image scaled to display full screen"
+		## 2. map those coordinates onto the actual picture coordinates
+		## 3. Crop the image to size
+		## 4. Place the cropped image in the correct position on the background.
+
+		#####  Set up parameters for start and end points of kenburns effect:
+		window_start=`echo "${effect1_params[$i]}" | awk -F';' '{print $1";"$2}'`
+		parse_window "$window_start" "$file"
+		xs0=$x0 ; ys0=$y0 ; xs1=$x1 ; ys1=$y1
+		if [ -z $x0 ] || [ -z $y0 ] || [ -z $x1 ] || [ -z $y1 ] ; then
+			myecho "[dvd-slideshow] Error: No starting position found for kenburns effect"	
+			myecho "[dvd-slideshow] Example: "
+			myecho "[dvd-slideshow] image.jpg:duration:subtitle:kenburns:70%;topleft;75%;bottomright"	
+			cleanup; exit 1
+		fi
+		window_end=`echo "${effect1_params[$i]}" | awk -F';' '{print $3";"$4}'`
+		parse_window "$window_end" "$file"
+		xe0=$x0 ; ye0=$y0 ; xe1=$x1 ; ye1=$y1
+		if [ -z $x0 ] || [ -z $y0 ] || [ -z $x1 ] || [ -z $y1 ] ; then
+			myecho "[dvd-slideshow] Error: No ending position found for kenburns effect"	
+			myecho "[dvd-slideshow] Example: "
+			myecho "[dvd-slideshow] image.jpg:duration:subtitle:kenburns:70%;topleft;75%;bottomright"	
+			cleanup; exit 1
+		fi
+		if [ $xs0 -eq $xe0 ] && [ $ys0 -eq $ye0 ] && [ $xs1 -eq $xe1 ] && [ $ys1 -eq $ye1 ] ; then
+			# start and end are the same!
+			myecho "[dvd-slideshow] ERROR: Start and end of kenburns effect are the same!"	
+			cleanup; exit 1
+		fi
+
+		## figure out the size of the window scaled to the original image size:
+#		ratio=$(( 100* $image_width / $image_height ))
+#		out_ratio=$(( 100* $width / $height ))
+#		if [ "$ratio" -gt "$(( $out_ratio ))" ] ; then
+#			# image width greater than output width at same scale (add black to top and bottom)
+#			newwidth=$image_width
+#			newheight=$(( $height * $image_width / $width ))
+##			echo "newheight=$newheight"
+#		elif [ "$ratio" -lt $(( $out_ratio )) ] ; then
+#			# image height greater than output height at same scale (add black to left and right)
+#			newwidth=$(( $width * $image_height / $height ))
+#			newheight=$image_height
+##			echo "newwidth=$newwidth"
+#		else
+#			myecho "[dvd-slideshow] ERROR: something is wrong with the image sizing"
+#			cleanup; exit 1
+#		fi
+#		[ $debug -ge 2 ] && myecho "[dvd-slideshow] Buffered image size= $newwidth x $newheight"	
+
+		#### now we have the parameters set up.  The coordinate system is relative to the 
+		#### ORIGINAL image size, buffered out to the full DVD frame:
+		s_width=$(( $xs1 - $xs0 )) ; s_height=$(( $ys1 - $ys0 ))
+		e_width=$(( $xe1 - $xe0 )) ; e_height=$(( $ye1 - $ye0 ))
+		[ $debug -ge 2 ] && myecho "[dvd-slideshow] Coordinate system is original image size buffered out to 3:2"
+		[ $debug -ge 2 ] && myecho "[dvd-slideshow] Start: width=$s_width height=$s_height    $xs0,$ys0 : $xs1,$ys1"
+		[ $debug -ge 2 ] && myecho "[dvd-slideshow] End:   width=$e_width height=$e_height    $xe0,$ye0 : $xe1,$ye1"
+
+		## so if we're using only 50% of the image, we can pre-crop the image before the
+		## main loop to save some processing time...
+		## get smallest size of image during effect to know how to rescale:
+######################################################################### no pre-crop now!
+#		min_width=`min $s_width $e_width`	
+#		min_height=`min $s_height $e_height`	
+#		xc0=`min $xs0 $xe0`; xc1=`max $xs1 $xe1`	
+#		yc0=`min $ys0 $ye0`; yc1=`max $ys1 $ye1`	
+#		c_width=$(( $xc1 - $xc0 )) ; c_height=$(( $yc1 - $yc0 ))
+#		[ $debug -ge 2 ] && myecho "[dvd-slideshow] Smallest window during kenburns is $min_width x $min_height"
+#		[ $debug -ge 2 ] && myecho "[dvd-slideshow] Pan/zoom uses $c_width x $c_height of original $image_width x $image_height image"
+#		if [ $medium_quality -eq 1 ] || [ $low_quality -eq 1 ] ; then
+#			factor=1
+#		else
+#			factor=1
+#		fi
+#		if [ $c_width -ne $image_width ] && [ $c_height -ne $image_height ] ; then
+#			[ $debug -ge 2 ] && myecho "[dvd-slideshow] Cropping from $xc0,$yc0 to $xc1,$yc1"
+#		fi
+#		## rescale the image so the width has a resolution of 720:
+#		factor_percent=$(( $factor * 100 * $width / $image_width ))
+#
+#		## no change for now:
+#		factor_percent=$(( $factor * 100 ))
+#		[ $debug -ge 2 ] && myecho "[dvd-slideshow] shrink/expand ratio=$factor_percent"%
+#		convert "$outdir/temp_slideshow_image.png" -crop "$c_width"x"$c_height"+$xc0+$yc0 -resize "$factor_percent"% -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc		
+#
+#		## now the image is cropped to be the large size and resized by factor
+#		## reset / change the start and end points: (coordiate transformation by xe0,ye0
+#		xs0=$(( ($xs0-$xc0) * $factor_percent / 100 )); ys0=$(( ($ys0-$yc0) * $factor_percent / 100 )); 
+#		xs1=$(( ($xs1-$xc0) * $factor_percent / 100 )); ys1=$(( ($ys1-$yc0) * $factor_percent / 100 )); 
+#		xe0=$(( ($xe0-$xc0) * $factor_percent / 100 )); ye0=$(( ($ye0-$yc0) * $factor_percent / 100 )); 
+#		xe1=$(( ($xe1-$xc0) * $factor_percent / 100 )); ye1=$(( ($ye1-$yc0) * $factor_percent / 100 )); 
+#		[ $debug -ge 2 ] && myecho "[dvd-slideshow] new params=$xs0,$ys0 ; $xs1,$ys1 ; $xe0,$ye0 ; $xe1,$ye1"
+
+		################################################################
+		convert "${image[$i]}" "$outdir"/temp_slideshow_image_scaled.mpc		
+
+		## adjust step size:
+#		[ "$frames" -lt 45 ] && stepsize=1 || stepsize=2 
+		stepsize=1
+		if [ "$low_quality" -eq 1 ] ; then
+			stepsize=5
+		fi
+
+		## start loop for kenburns effect:
+		myechon  "[dvd-slideshow]"
+		lastbar=0
+		for fr in `seq 1 $stepsize $frames`; do
+			dj=`addzeros $fr`
+			## multiply by 10 to retain one decimal place for better accuracy (use later)
+			## calculate the crop coordinates in the large image frame:
+			x0=$(( 10*$xs0 + 10*$(($xe0-$xs0)) *$fr / $frames ))
+			y0=$(( 10*$ys0 + 10*$(($ye0-$ys0)) *$fr / $frames ))
+			x1=$(( 10*$xs1 + 10*$(($xe1-$xs1)) *$fr / $frames ))
+			y1=$(( 10*$ys1 + 10*$(($ye1-$ys1)) *$fr / $frames ))
+			## get rid of the factor of 10 now by using the function div10
+			x_width=`div10 $(( $x1 - $x0 ))` ; y_height=`div10 $(( $y1 - $y0 ))`
+#			fx0=$(( $x0 % 10 )); fy0=$(( $y0 % 10 )); fx1=$(( $x1 % 10 )); fy1=$(( $y1 % 10 ))
+#			x0=$(( $x0 / 10 )); y0=$(( $y0 / 10 )); x1=$(( $x1 / 10 )); y1=$(( $y1 / 10 ))
+			x0=`div10 $x0`; y0=`div10 $y0`; x1=`div10 $x1`; y1=`div10 $y1`
+
+			mycrop  # takes the parameters from <parse_window> (x0,y0,x1,y1,xi,yi) and returns: 
+			[ $debug -ge 2 ] && myecho "[dvd-slideshow] $fr x0,y0,x1,y1=$x0,$y0,$x1,$y1 xc0,yc0=$xc0,$yc0 xci,yci=$xci,$yci"
+#			[ $debug -ge 2 ] && myecho "[dvd-slideshow] c_width=$c_width c_height=$c_height xc0=$xc0 yc0=$yc0 xci=$xci yci=$yci"  
+			thisbar=$(( $fr * 39 / $frames ))
+			if [ "$thisbar" -gt "$lastbar" ] ; then
+				delta=$(( $thisbar - $lastbar ))
+				if [ "$delta" -eq 1 ] ; then 
+					myechon "#"
+				elif [ "$delta" -eq 2 ] ; then
+					myechon "##"
+				else 
+					myechon "###"
+				fi
+				lastbar="$thisbar"
+			fi
+			(convert "$outdir/temp_slideshow_image_scaled.mpc" -crop "$c_width"x"$c_height"+$xc0+$yc0 -resize $resolution -type TrueColor -depth 8 miff:- | composite -geometry "+$xci+$yci" -type TrueColor -depth 8 miff:- "$outdir/slideshow_background.ppm" "$outdir/fade_$dj.ppm" ; extracopies $fr $frames ) 
+			last_fade="$!"
+#			echo -ne "\b\b\b\b"
+		done
+#		if [ -n "`ps --no-headers $last_fade`" ] ; then
+#			echo -ne "\b\b\b\b\b\b\b Waiting for all frames to finish..."
+#			wait "$last_fade"
+#			echo -ne "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+#		fi
+#		echo -ne "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+		waitforfile "$outdir/fade_$dj.ppm"
+		encode_fade
+		myecho "#"
+		## just in case we want to fade out or crossfade, we need to save the last image:
+		cp "$outdir/fade_$dj.ppm" "$outdir/slide_$i.ppm"
+		rm "$outdir"/fade_????.ppm
+	elif [ "${effect1[$i]}" == 'scroll' ] ; then
+#		myecho "[dvd-slideshow] Doing scroll effect"
+		## assume a panorama image?  use full image height.
+		# textfile format is:  
+		# file:duration:comment:scrollright
+
+		## resize the image first to speed things up:
+		## remember output resolution is $width x $height
+
+		image_width="`imagewidth "${file}"`"
+		image_height="`imageheight "${file}"`"
+		## calculate frame size after adding black side bars for portrait pictures:
+		if [ $image_width -gt $image_height ] ; then
+			# landscape: 
+			convert -resize x$height "${file}" -type TrueColor -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc		
+		else
+			# portrait: 
+			convert -resize "$width" "${file}" -type TrueColor -depth 8 "$outdir"/temp_slideshow_image_scaled.mpc		
+		fi
+
+		# now the image is scaled so the height is correct
+		image_width="`imagewidth "$outdir/temp_slideshow_image_scaled.mpc"`"
+		image_height="`imageheight "$outdir/temp_slideshow_image_scaled.mpc"`"
+		[ "$debug" -ge 1 ] && myecho "[dvd-slideshow] image_width=$image_width image_height=$image_height"
+		if [ "${effect1_params[$i]}" == 'right' ] ; then
+			myecho "[dvd-slideshow] Doing scroll right effect"
+			xs0=0 ; ys0=0 # scroll right
+			xs1="$image_width"; ys1="$image_height"
+			xe0=$(( $image_width - $width )) ; ye0=0
+			xe1="$image_width"; ye1="$image_height" # y doesn't change
+		elif [ "${effect1_params[$i]}" == 'left' ] ; then
+			myecho "[dvd-slideshow] Doing scroll left effect"
+			xs0=$(( $image_width - $width )) ; ys0=0
+			xs1="$image_width"; ys1="$image_height" # y doesn't change
+			xe0=0 ; ye0=0 # scroll left
+			xe1="$image_width"; ye1="$image_height"
+		elif [ "${effect1_params[$i]}" == 'up' ] ; then
+			myecho "[dvd-slideshow] Doing scroll up effect"
+			xs0=0 ; ys0=$(( $image_height - $height )) 
+			xs1="$image_width"; ys1="$image_height"
+			xe0=0 ; ye0=0 # scroll up
+			xe1="$width"; ye1="$height" # x doesn't change
+		elif [ "${effect1_params[$i]}" == 'down' ] ; then
+			myecho "[dvd-slideshow] Doing scroll down effect"
+			xs0=0 ; ys0=0 # scroll down
+			xs1="$width"; ys1="$height" # x doesn't change
+			xe0=0 ; ye0=$(( $image_height - $height )) 
+			xe1="$image_width"; ye1="$image_height"
+		else
+			myecho "[dvd-slideshow] ERROR: bad effect parameters ${effect1_params[$i]}"
+			cleanup; exit 1
+		fi
+		[ "$debug" -ge 2 ] && myecho "[dvd-slideshow] params=$xs0,$ys0 ; $xs1,$ys1 ; $xe0,$ye0 ; $xe1,$ye1"
+		[ "$frames" -lt 90 ] && stepsize=1 || stepsize=2 
+		stepsize=1
+		if [ "$low_quality" -eq 1 ] ; then
+			stepsize=5
+		fi
+		myechon "[dvd-slideshow]"
+		lastbar=0
+		for fr in `seq 1 $stepsize $frames`; do
+			dj=`addzeros $fr`
+			x0=$(( $xs0 + $(($xe0-$xs0)) * $fr / $frames ))
+			y0=$(( $ys0 + $(($ye0-$ys0)) * $fr / $frames ))
+			x1=$(( $xs1 + $(($xe1-$xs1)) * $fr / $frames ))
+			y1=$(( $ys1 + $(($ye1-$ys1)) * $fr / $frames ))
+			pan_rate=$((  ($xe0-$xs0) / $frames ))
+			thisbar=$(( $fr * 39 / $frames ))
+			if [ "$thisbar" -gt "$lastbar" ] ; then
+				delta=$(( $thisbar - $lastbar ))
+				if [ "$delta" -eq 1 ] ; then 
+					myechon "#"
+				elif [ "$delta" -eq 2 ] ; then
+					myechon "##"
+				else 
+					myechon "###"
+				fi
+				lastbar="$thisbar"
+			fi
+			(convert -crop "$width"x"$height"+$x0+$y0 -type TrueColor \
+				-depth 8 "$outdir/temp_slideshow_image_scaled.mpc" \
+				"$outdir/fade_$dj.ppm" ; extracopies $fr $frames)
+#			convert -crop "$width"x"$height"+$x0+$y0 -type TrueColor \
+#				-depth 8 "$outdir/temp_slideshow_image_scaled.ppm" - | \
+# no need for composite because the image should cover the whole background!
+#			composite -gravity center -type TrueColor -depth 8 - \
+#				"$outdir/slideshow_background.ppm" "$outdir/fade_$dj.ppm"
+			last_fade="$!"
+#			echo -ne "\b\b\b\b"
+		done
+#		if [ -n "`ps --no-headers $last_fade`" ] ; then
+#			echo -ne "\b\b\b\b\b\b\b Waiting for all frames to finish..."
+#			wait "$last_fade"
+#			echo -ne "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+#		fi
+#		echo -ne "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+		waitforfiles "$outdir/fade" $dj
+		encode_fade
+		myecho "#"
+		## just in case we want to fade out or crossfade, we need to save the last image:
+		cp "$outdir/fade_$dj.ppm" "$outdir/slide_$i.ppm"
+		rm "$outdir"/fade_????.ppm
+	elif [ "$file" == 'black' ] ; then  ###############################################
+		## use plain black background with no picture
+		## phase out "black" tag.  Use background:::black instead
+		myecho "[dvd-slideshow] ERROR: use of black is depreciated.  Use the syntax:"
+		myecho "[dvd-slideshow]        background:duration:subtitle:black   instead of:"
+		myecho "[dvd-slideshow]        black:duration:subtitle            <depreciated>"
+		cleanup; exit 1
+	elif [ "$file" == 'testslide' ] ; then  ###############################################
+		## Create a slide of size 720x480 with yellow lines spaced every 100 pixels
+		convert -size 720x480 xc:gray -fill yellow -draw "line 0,40,720,40 text 110,40 \"40\" line 0,140,720,140 text 110,140 \"140\" line 0,240,720,240 text 110,240 \"240\" line 0,340,720,340 text 110,340 \"340\" line 0,440,720,440 text 110,440 \"440\" " -fill orange -draw "line 60,0,60,480 text 60,180 \"60\" line 160,0,160,480 text 160,180 \"160\" line 260,0,260,480 text 260,180 \"260\" line 360,0,360,480 text 360,180 \"360\" line 460,0,460,480 text 460,180 \"460\" line 560,0,560,480 text 560,180 \"560\" line 660,0,660,480 text 660,180 \"660\" " -type TrueColor -depth 8 -quality 100 "$outdir/slide_$i.ppm"
+		encode
+		myecho "[dvd-slideshow]########################################"
+	elif [ "$file" == 'background' ] ; then  ###############################################
+		bg="${effect1[$i]}"
+		background "$bg"   # calls the background image subroutine
+		if [ "${duration[$i]}" -ne 0 ] ; then  
+			## user wants to actually display background for a given time
+			myecho "[dvd-slideshow] Displaying background image ${bgfile}"
+			cp "$outdir/slideshow_background.ppm" "$outdir/slide_$i.ppm"
+#			cp "$outdir/slide_$i.ppm" "$outdir/temp_slideshow_image.ppm"
+			encode
+		fi
+		myecho "[dvd-slideshow]########################################"
+	elif [ "${audio_file[$i]}" -eq 1 ] ; then  ###############################################
+		if [ "${audio_track[$i]}" -eq 1 ] ; then
+			audio_1[$i_audio]="${file}"
+			audio1_effect1[$i_audio]="${effect1[$i]}"
+			audio1_effect1_params[$i_audio]="${effect1_params[$i]}"
+			audio1_effect2[$i_audio]="${effect2[$i]}"
+			audio1_effect2_params[$i_audio]="${effect2_params[$i]}"
+			audio_index="$i_audio"
+			audio_index_padded=`addzeros "$i_audio"`
+			i_audio=$(( $i_audio + 1 ))
+		elif [ "${audio_track[$i]}" -eq 2 ] ; then
+			audio_2[$j_audio]="${file}"
+			audio2_effect1[$j_audio]="${effect1[$i]}"
+			audio2_effect1_params[$j_audio]="${effect1_params[$i]}"
+			audio2_effect2[$j_audio]="${effect2[$i]}"
+			audio2_effect2_params[$j_audio]="${effect2_params[$i]}"
+			audio_index="$j_audio"
+			audio_index_padded=`addzeros "$j_audio"`
+			j_audio=$(( $j_audio + 1 ))
+		else
+			myecho "[dvd-slideshow] ERROR: Bad audio track number."
+			cleanup; exit 1
+		fi
+		track="${audio_track[$i]}"
+		suffix=`echo "$file" | awk -F. '{print tolower($NF)}'`
+		if [ "$suffix" == "mp3" ] ; then
+			myecho "[dvd-slideshow] decoding mp3 audio... we will splice it later."
+			lame --decode "${file}" "$outdir/audio$track"_"$audio_index_padded.wav"
+		elif [ "$suffix" == "ogg" ] ; then
+			myecho "[dvd-slideshow] decoding ogg audio... we will splice it later."
+			oggdec --quiet -o "$outdir/audio$track"_"$audio_index_padded.wav" "${file}"
+		elif [ "$suffix" == "wav" ] ; then
+			myecho "[dvd-slideshow] processing wav audio... we will splice it later."
+			cp "${file}" "$outdir/audio$track"_"$audio_index_padded.wav"
+		elif [ "$file" == 'silence' ]; then
+			myecho "[dvd-slideshow] creating silent audio track... we will splice it later."
+			sox -t raw -s -w -c 2 -r 48000 /dev/zero -t wav -c 2 -r 48000 \
+				"$outdir/audio$track"_"$audio_index_padded.wav" trim 0 1
+		else
+			myecho "[dvd-slideshow] ERROR:  Unknown audio file format.  Must be .mp3, .ogg, .wav, or silence"
+		fi
+		## now set the starting and ending point of this audio track:
+#		echo "audio_track=${audio_track[$i]} "
+		if [ "${audio_track[$i]}" -eq 1 ] ; then
+			audio1_start[$audio_index]="$slide_start_time"   # in ms
+			## set ending point of the audio track:
+			if [ "$audio_index" -gt 0 ] ; then # not first audio track
+				audio1_end[$(($audio_index-1))]="$slide_end_time"   # in ms from last slide
+			fi
+		elif [ "${audio_track[$i]}" -eq 2 ] ; then
+			audio2_start[$audio_index]="$slide_start_time"   # in ms
+			## set ending point of the audio track:
+			if [ "$audio_index" -gt 0 ] ; then
+				audio2_end[$(($audio_index-1))]="$slide_end_time"   # in ms from last slide
+			fi
+		fi
+		myecho "[dvd-slideshow] track=${audio_track[$i]} audio_start=$slide_start_time audio_end=$slide_end_time"
+		sox "$outdir/audio$track"_"$audio_index_padded.wav" -e stat 2> trash.txt 
+		## need to fix this so it's accurate to 0.01 sec, not just 1 sec
+		## this will get floor(time) now.
+		song_length=`cat trash.txt | grep 'Length (seconds):' | awk -F: '{print $2}' | awk -F. '{print $1}'`
+		song_length_hms=`hms "$(( 100 * $song_length))"`
+		song_length_hu="$(( 100 * $song_length))"
+		myecho "[dvd-slideshow]########################################"
+	else
+		myecho "[dvd-slideshow] Unrecognized or malformed line in your input file:"
+		myecho "[dvd-slideshow] $file effect=${effect1[$i]} effect_params=${effect1_params[$i]}"
+		echo "Fix it and try again."
+		cleanup; exit 1
+	fi
+	
+	## calculate the time point that we're at:
+	total_slideshow_frames=$(( $total_slideshow_frames + $frames ))
+	slide_end_frame="$total_slideshow_frames"
+	slide_end_time=$(( $slide_end_frame * 100 * 100 / $frames_per_sec ))  ## in hundreths of a second
+	slide_end_hms=`hms "$slide_end_time"`
+	if [ "${audio_file[$i]}" -eq 0 ] && [ $debug -ge 1 ]; then 
+		myecho "[dvd-slideshow] end_frame_number=$slide_end_frame end_time=$slide_end_hms"
+	fi
+
+	thumb_width=$(( ( $width - 100 ) / 6 ))
+	thumb_height=$(( ( $height - 100 ) / 4 ))
+	## setup the chapter markers at the start of each picture:
+	if [ "$write_chap" -eq 1 ] ; then   # and chapter-select =1 
+#		chapter_marker="$(( ( ($slide_start_time / 100) + 1 ) * 100 ))" ## round up chapter marker
+		chapter_marker="$slide_start_time"  # 
+		chaps[$this_chap]=`hms "$chapter_marker"`
+		## now make a tiny thumbnail for the menu?:
+		thumbs[$this_chap]="$outdir/slide_"$i"_thumb.ppm"
+#		convert "$outdir/slide_$i.ppm" -depth 8 -resize "$thumb_width"x"$thumb_height" "$outdir"/slide_$i"_thumb.ppm"
+		this_chap=$(($this_chap + 1))
+		write_chap=0
+	fi
+
+	## now, create the xml file to pass to spumux
+	if [ "$i" -eq 0 ]; then  # only do once on first pass:
+		echo '<subpictures>' > "$outdir/$slideshow_name".spumux
+		echo '	<stream>' >> "$outdir/$slideshow_name".spumux
+	fi	
+
+	## add the subtitle track if it exists:
+	if [ -n "${subtitle[$i]}" ] ; then
+		## let's check for a config file first?
+
+		## fix any special characters:
+		subtitle[$i]=`echo "${subtitle[$i]}" | sed -e 's/"/\\\\"/g'`
+		## make the subtitle break up into up to 4 different lines?
+		font_width=15  # actually it's 14.4, but this should give us some margin
+#		characters=`echo "${subtitle[$i]}" | wc -c`
+		characters="${#subtitle[$i]}"
+		line_width=$(( $font_width * $characters ))
+#		echo "characters=$characters linewidth=$line_width"
+		if [ "$line_width" -gt 720 ] ; then
+			## need to split the line:
+#			echo "splitting line..."
+			characters2=$(( $characters / 2 + 1))
+			# try cutting in the middle:
+			subtitle1="${subtitle[$i]:0:$characters2}"
+			subtitle2="${subtitle[$i]:$characters2:$characters2}" 
+			# now re-join a potential broken word:
+			if [ "${subtitle[$i]:$characters2:1}" != ' ' ] ; then	
+				# break occurred in the middle of a word. re-join the word:
+				wordend=`echo "$subtitle2" | awk '{print $1}'`
+				subtitle1="$subtitle1$wordend"
+				subtitle2="${subtitle2#$wordend }"
+			fi
+		else
+			subtitle1=""
+			subtitle2="${subtitle[$i]}"
+		fi
+
+#		myecho "[dvd-slideshow] subtitle1=$subtitle1"
+#		myecho "[dvd-slideshow] subtitle2=$subtitle2"
+		has_subtitles=1
+		transparent_color="ff0000"
+        	convert -size $resolution xc:red $font -pointsize $subtitle_font_size \
+		-gravity South -fill white -stroke black -strokewidth 3 +antialias \
+		-draw "text 0,105 \"$subtitle1\"" -draw "text 0,75 \"$subtitle2\"" \
+		-stroke none -draw "text 0,105 \"$subtitle1\"" -draw "text 0,75 \"$subtitle2\"" \
+		"$outdir/subtitle_$i.png"
+#        	convert -size $resolution -fill transparent xc:transparent +antialias $font -pointsize $subtitle_font_size \
+#		-gravity South -fill gray99 -stroke black -strokewidth 3 \
+#		-draw "text 0,105 \"$subtitle1\"" -draw "text 0,75 \"$subtitle2\"" \
+#		-stroke none -draw "text 0,105 \"$subtitle1\"" -draw "text 0,75 \"$subtitle2\"" \
+#		-colors 3 -depth 8 "$outdir/subtitle_$i.png"
+#		"$outdir/subtitle.png"
+		## imagemagick can't seem to create a color depth less than 8 bit, so we need to use NetPBM
+
+#		pngtopnm "$outdir/subtitle.png" | pnmdepth 3 \
+#		| pnmtopng -transparent "#7f7f7f" > "$outdir/subtitle_out.png"
+#		mv "$outdir/subtitle_out.png" "$outdir/subtitle_$i.png"
+
+		## let's assume the subtitle stays on the whole duration
+		## of the slide
+		subtitle_start="${slide_start_hms}"
+		subtitle_end="${slide_end_hms}"
+		echo '		<spu start="'${subtitle_start}'" end="'${subtitle_end}'" transparent="'$transparent_color'" image="'$outdir/subtitle_$i.png'">' >> "$outdir/${slideshow_name}".spumux
+		echo '		</spu>' >> "$outdir/${slideshow_name}".spumux
+
+	fi
+	let i=$i+1
+done
+
+## write the bottom of the subpictures file:
+if [ -f "$outdir/${slideshow_name}".spumux ]; then
+	echo '	</stream>' >> "$outdir/${slideshow_name}".spumux
+	echo '</subpictures>' >> "$outdir/${slideshow_name}".spumux
+fi
+
+############################### Wait for mpeg2enc to finish
+
+if [ "$yuvcat" -eq 0 ]; then
+       ##  now we need to cat the mpeg files together:
+       myecho "[dvd-slideshow] Joining each mpeg..."
+       cat "$outdir"/slide_*.mpg > "$outdir/video.mpg"
+else
+       # just close the fifo and wait for the encoder to finish
+       myecho "[dvd-slideshow] waiting for mpeg2enc to finish..."
+       exec 55>&-  # close pipe to mpeg2enc
+       wait $yuvpid
+       yuvpid=0
+	if [ "$mpegid" -ne 0 ] ; then
+		## this should only happen when we encode video?
+	       myecho "[dvd-slideshow] Joining each mpeg..."
+	       cat "$outdir"/video_*.mpg > "$outdir/video.mpg"
+	else
+		mv "$outdir"/video_0.mpg "$outdir/video.mpg"
+	fi
+fi
+
+## calculate total slideshow time:
+#end_time=$(( $total_slideshow_frames * 100 / $frames_per_sec ))  ## in seconds
+end_time="$slide_end_time"
+end_hms="$slide_end_hms"
+
+############################################################################
+# AUDIO section...
+##########################################################################
+myecho "[dvd-slideshow]###############"
+myecho "[dvd-slideshow] Processing audio..."
+myecho "[dvd-slideshow]###############"
+
+## now do the audio for this slideshow ##########################
+let i=0
+total_audio_length=0
+commandline_audio=0
+if [ -n "${audio[0]}" ] ; then  ## command-line passed audio
+	for file in "${audio[@]}"; do
+		i_padded=`addzeros $i`
+		myecho "[dvd-slideshow] Working on track 1 audio file $i"
+		myecho "[dvd-slideshow] $file"
+		fade_in_time="300"
+		fade_out_time="300"
+		fade_in_hms=`hms "$fade_in_time"`
+		fade_out_hms=`hms "$fade_out_time"`
+		myecho "[dvd-slideshow] fade_in_time=$fade_in_hms fade_out_time=$fade_out_hms"
+#		audio_end="$end_time"	
+#		audio_end_hms=`hms $(( $audio_end ))`
+#		audio_start_hms="0"  # cannot modify starting point yet...
+		track=1
+#		sox "$outdir/audio1_$i.wav" -e stat 2> trash.txt 
+		## need to fix this so it's accurate to 0.01 sec, not just 1 sec
+		## this will get floor(time) now.
+#		song_length=`cat trash.txt | grep 'Length (seconds):' | awk -F: '{print $2}' | awk -F. '{print $1}'`
+#		rm trash.txt
+		song_length=`wavlength "$outdir/audio1_$i_padded.wav"`
+#		echo "song length=$song_length"
+		song_length_hms=`hms "$song_length"`
+		total_audio_length="$(( $total_audio_length + $song_length ))"
+		myecho "[dvd-slideshow] total_audio_length=`hms $total_audio_length`"
+		## fade in by default... may change later
+		sox -v 0.95 "$outdir/audio$track"_"$i_padded.wav" -w -s -c 2 -r 48000 "$outdir/audio1_$i_padded.raw" \
+		fade t "$fade_in_hms" "$song_length_hms" "$fade_out_hms"
+		let i=$i+1
+		myecho "[dvd-slideshow] ###############"
+	done
+	let i=$i+1
+	## check to make sure the audio spans the video time:
+#	echo "end_time=$end_time hms=$end_hms"
+	if [ "$total_audio_length" -lt "$end_time" ] ; then
+		# video is longer than audio.  need to add silence to end.
+		thetime_hms=`hms $(( $end_time - $total_audio_length + 100 ))` #plus 10 so sox actually crops.
+		myecho "[dvd-slideshow] Buffering end of audio file with silence for $thetime_hms"
+		sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir/audio1_$i_padded.raw" trim 0 "$thetime_hms"
+	fi
+	
+	## cat all the audio files together: 
+	ls "$outdir"/audio1_????.raw | xargs -n 1 cat | sox -t raw -w -s -c 2 -r 48000 - "$outdir/audio1.wav"
+#	sox "$outdir/audio1.wav" -e stat 2> trash.txt 
+	## need to fix this so it's accurate to 0.01 sec, not just 1 sec
+	## this will get floor(time) now.
+#	song_length=`cat trash.txt | grep 'Length (seconds):' | awk -F: '{print $2}' | awk -F. '{print $1}'`
+#	rm trash.txt
+#	song_length_hms=`hms "$(( 100 * $song_length))"`
+#	song_length_hu="$(( 100 * $song_length))"
+	## fade out at end of video:
+#	echo "End Time=$end_hms fade_out=$fade_out_hms"
+	sox "$outdir/audio1.wav" "$outdir/audio_out.wav" fade t 0 "$end_hms" "$fade_out_hms"
+	mv "$outdir/audio_out.wav" "$outdir/audio1.wav"
+	## mpeg2 audio:
+	## AC3 audio may be more compatible:
+	if [ "$ac3" -eq 1 ] ; then
+		checkforprog ffmpeg
+		myecho "[dvd-slideshow] Creating ac3 audio..."
+#		check_rm "$outdir/audio1.ac3"
+		ffmpeg -i "$outdir/audio1.wav" -y -vn -ab 192 -acodec ac3 -ar 48000 -ac 6 "$outdir/audio1.ac3"
+	else
+		## toolame is way faster! (3x in my test)
+		it=`which toolame`
+		if [ -n "$it" ] ; then
+			toolame_version=`toolame -h | head -4 | grep version | awk '{ print $3 }'`
+			myecho "[dvd-slideshow] using toolame $toolame_version..."
+			if [ "$toolame_version" == '0.2m' ] ; then
+				toolame -s 48000 -b 128 "$outdir/audio1.wav" "$outdir/audio1.mp2" 
+			else
+				toolame -s 48 -b 128 "$outdir/audio1.wav" "$outdir/audio1.mp2" 
+			fi
+		else
+			myecho "[dvd-slideshow] using mp2enc"
+
+			## 	#dnlam: mp2enc has problems with long $outdir or characters in $outdir
+			pushd . > /dev/null
+			cd "$outdir"
+			echo "[dvd-slideshow] using mp2enc -v $verbosity -b 224 -r 48000 -s -o \"$outdir/audio.mp2\" < \"$outdir/audio.wav\""
+			mp2enc -v $verbosity -b 128 -r 48000 -s -o audio1.mp2 < audio1.wav
+			popd > /dev/null
+		fi
+	fi
+	commandline_audio=1
+fi
+
+let i=0
+if [ -z "${audio_1[0]}" ] && [ "$commandline_audio" -eq 0 ] ; then
+	## no audio file passed on command line or txtfile.  use silence:
+	audio_1[0]='silence'  # no duration needed
+	myecho "[dvd-slideshow] No audio files passed.  Using $end_hms silence."
+	audio1_start=0 
+	audio1_end="$end_time"
+fi
+if [ -n "${audio_1[0]}" ] ; then   ## audio track 1 files specified in .txt file
+	for file in "${audio_1[@]}"; do
+		i_padded=`addzeros $i`
+		myecho "[dvd-slideshow] Working on track 1 audio file $i"
+		myecho "[dvd-slideshow] $file"
+		if [ -z "${audio1_effect1_params[$i]}" ] ; then
+			fade_in_time="0"
+		else
+			fade_in_time="$(( ${audio1_effect1_params[$i]} * 100 ))" 
+		fi
+		if [ -z "${audio1_effect2_params[$i]}" ] ; then
+			fade_out_time="0"
+		else
+			fade_out_time="$(( ${audio1_effect2_params[$i]} * 100 ))" 
+		fi
+		fade_in_hms=`hms "$fade_in_time"`
+		fade_out_hms=`hms "$fade_out_time"`
+		myecho "[dvd-slideshow] fade_in_time=$fade_in_hms fade_out_time=$fade_out_hms"
+		if [ -z "${audio1_end[$i]}" ] ; then
+			## must be last audio track.  assume run til end
+			audio1_end[$i]="$end_time"	
+		fi
+		myecho "[dvd-slideshow] audio_start=${audio1_start[$i]}. audio_end=${audio1_end[$i]}."
+		myecho "[dvd-slideshow] audio_start=`hms ${audio1_start[$i]}`. audio_end=`hms ${audio1_end[$i]}`."
+		audio_end_hu=$(( ${audio1_end[$i]} - ${audio1_start[$i]} ))
+		audio_end_hms=`hms $(( ${audio1_end[$i]} - ${audio1_start[$i]} ))`
+		audio_start_hms="0"  # cannot modify starting point yet...
+
+		if [ ${audio1_start[$i]} -ge ${audio1_end[$i]} ] ; then
+			myecho "[dvd-slideshow] ERROR: Audio file endpoint is same or before start."
+			myecho "[dvd-slideshow] 	     This is sometimes caused by having two audio files"
+			myecho "[dvd-slideshow] 	     sequentially one after another with no slide between."
+			myecho "[dvd-slideshow] 	     Fix it and try again."
+			cleanup; exit 1
+		fi
+	
+		if [ "$file" == 'silence' ]; then  
+			myecho "[dvd-slideshow] creating silence .wav file for $audio_end_hms"
+			sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir"/audio1_$i_padded.raw trim "0" "$audio_end_hms"
+		else
+			## file should only be wav format at this point since it was decoded before
+			## all audio files are of the format $outdir/audio_1.wav
+			# I found some "popping" in the audio for some tracks.
+			# it turns out that this is caused by audio going
+			# too low or too high and getting clipped.
+			# reducing the volume a little should help.
+			volume=0.95
+			sox "$outdir/audio1_$i_padded.wav" -e stat 2> trash.txt 
+			## need to fix this so it's accurate to 0.01 sec, not just 1 sec
+			## this will get floor(time) now.
+			song_length=`cat trash.txt | grep 'Length (seconds):' | awk -F: '{print $2}' | awk -F. '{print $1}'`
+			rm trash.txt
+			song_length_hms=`hms "$(( 100 * $song_length))"`
+			song_length_hu="$(( 100 * $song_length))"
+			myecho "[dvd-slideshow] original_audio_track_length=$song_length_hms"
+	#		myecho "[dvd-slideshow] audio_start_hms=$audio_start_hms audio_end_hms=$audio_end_hms"
+			if [ "$song_length_hu" -lt "$audio_end_hu" ] ; then
+				# video is longer than audio.  need to add silence to end.
+				# fade only to the end of song length now, because we may have to add silence:
+				sox -v 0.95 "$outdir/audio1_$i_padded.wav" -w -s -c 2 -r 48000 "$outdir/audio1_$i_padded.raw" \
+				fade t "$fade_in_hms" "$song_length_hms" "$fade_out_hms"
+				thetime_hms=`hms $(( $audio_end_hu - $song_length_hu + 100 ))` #plus 10 so sox actually crops.
+				myecho "[dvd-slideshow] Buffering end of audio file with silence for $thetime_hms"
+				sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir/silence.raw" trim 0 "$thetime_hms"
+				cat "$outdir/audio1_$i_padded.raw" "$outdir/silence.raw" > "$outdir/audio.raw" 
+				mv "$outdir/audio.raw" "$outdir/audio1_$i_padded.raw"
+				# hopefully there won't be many times where the audio needs to be buffered 
+				# at the end, so we'll add one extra step to make the coding easier:
+				sox -t raw -s -w -c 2 -r 48000 "$outdir/audio1_$i_padded.raw" "$outdir/audio1_$i_padded.wav"
+				rm "$outdir"/silence.raw
+			fi
+			## fade in by default... may change later
+			sox -v 0.95 "$outdir/audio1_$i_padded.wav" -w -s -c 2 -r 48000 "$outdir/audio1_$i_padded.raw" \
+			fade t "$fade_in_hms" "$audio_end_hms" "$fade_out_hms"
+			if [ $i -eq 0 ] && [ "${audio1_start[$i]}" -ne 0 ] ; then
+				## buffer beginning with silence:
+				thetime_hms=`hms "${audio1_start[$i]}"`
+				myecho "[dvd-slideshow] Buffering beginning of audio file with silence for $thetime_hms"
+				sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir/silence.raw" trim 0 "$thetime_hms"
+				cat "$outdir"/silence.raw "$outdir/audio1_$i_padded.raw" > "$outdir/audio.raw" 
+				mv "$outdir/audio.raw" "$outdir/audio1_$i_padded.raw"
+				rm "$outdir"/silence.raw
+			fi
+		fi
+		let i=$i+1
+		let v=$v+1
+		myecho "[dvd-slideshow] ###############"
+	done
+		
+	## cat all the audio files together: 
+	ls "$outdir"/audio1_????.raw | xargs -n 1 cat | sox -t raw -w -s -c 2 -r 48000 - "$outdir/audio1.wav"
+	## AC3 audio may be more compatible:
+	if [ "$ac3" -eq 1 ] ; then
+		myecho "[dvd-slideshow] Creating ac3 audio..."
+		checkforprog ffmpeg
+		myecho "[dvd-slideshow] Creating ac3 audio..."
+		check_rm "$outdir/audio1.ac3"
+		ffmpeg -i "$outdir/audio1.wav" -vn -ab 192 -acodec ac3 -ar 48000 -ac 6 "$outdir/audio1.ac3"
+	else
+		## toolame is way faster! (3x in my test)
+		it=`which toolame`
+		if [ -n "$it" ] ; then
+			toolame_version=`toolame -h | head -4 | grep version | awk '{ print $3 }'`
+			myecho "[dvd-slideshow] using toolame $toolame_version..."
+			if [ "$toolame_version" == '0.2m' ] ; then
+				toolame -s 48000 -b 128 "$outdir/audio1.wav" "$outdir/audio1.mp2" 
+			else
+				toolame -s 48 -b 128 "$outdir/audio1.wav" "$outdir/audio1.mp2" 
+			fi
+		else
+			myecho "[dvd-slideshow] using mp2enc"
+			mp2enc -v $verbosity -b 128 -r 48000 -s -o "$outdir/audio1.mp2" < "$outdir/audio1.wav"
+		fi
+	fi
+fi
+		
+#################################################################
+## now do this all again for audio track number 2:
+i=0
+if [ -n "${audio_2[0]}" ] ; then
+	## audio track is being used
+	for file in "${audio_2[@]}"; do
+		i_padded=`addzeros $i`
+		myecho "[dvd-slideshow] Working on track 2 audio file $i"
+		myecho "[dvd-slideshow] $file"
+	#	audio_2[$i_audio]="$file"
+		if [ -z "${audio2_effect1_params[$i]}" ] ; then
+			fade_in_time="0"
+		else
+			fade_in_time="$(( ${audio2_effect1_params[$i]} * 100 ))" 
+		fi
+		if [ -z "${audio2_effect2_params[$i]}" ] ; then
+			fade_out_time="0"
+		else
+			fade_out_time="$(( ${audio2_effect2_params[$i]} * 100 ))" 
+		fi
+		fade_in_hms=`hms "$fade_in_time"`
+		fade_out_hms=`hms "$fade_out_time"`
+		myecho "[dvd-slideshow] fade_in_time=$fade_in_hms fade_out_time=$fade_out_hms"
+		myecho "[dvd-slideshow] audio_start=`hms ${audio2_start[$i]}` audio_end=`hms ${audio2_end[$i]}`"
+		if [ -z "${audio2_end[$i]}" ] ; then
+			## must be last audio track.  assume run til end
+			audio2_end[$i]="$end_time"	
+		fi
+		audio_end_hu=$(( ${audio2_end[$i]} - ${audio2_start[$i]} ))
+		audio_end_hms=`hms $(( ${audio2_end[$i]} - ${audio2_start[$i]} ))`
+		audio_start_hms="0"  # cannot modify starting point yet...
+		if [ ${audio2_start[$i]} -ge ${audio2_end[$i]} ] ; then
+			myecho "[dvd-slideshow] ERROR: Audio file endpoint is same or before start."
+			myecho "[dvd-slideshow]	     This is sometimes caused by having two audio files"
+			myecho "[dvd-slideshow]	     sequentially one after another with no slide between."
+			myecho "[dvd-slideshow]	     Fix it and try again."
+			cleanup; exit 1
+		fi
+
+		if [ "$file" == 'silence' ]; then  
+			myecho "[dvd-slideshow] creating silence .wav file for $audio_end_hms"
+			sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir"/audio2_$i_padded.raw trim "0" "$audio_end_hms"
+		else
+			## file should only be wav format at this point since it was decoded before
+			## all audio files are of the format $outdir/audio_2.wav
+			# I found some "popping" in the audio for some tracks.
+			# it turns out that this is caused by audio going
+			# too low or too high and getting clipped.
+			# reducing the volume a little should help.
+			volume=0.95
+			sox "$outdir/audio2_$i_padded.wav" -e stat 2> trash.txt 
+			## need to fix this so it's accurate to 0.01 sec, not just 1 sec
+			## this will get floor(time) now.
+			song_length=`cat trash.txt | grep 'Length (seconds):' | awk -F: '{print $2}' | awk -F. '{print $1}'`
+			rm trash.txt
+			song_length_hms=`hms "$(( 100 * $song_length))"`
+			song_length_hu="$(( 100 * $song_length))"
+			myecho "[dvd-slideshow] original_audio_track_length=$song_length_hms"
+#			myecho "[dvd-slideshow] audio_start_hms=$audio_start_hms audio_end_hms=$audio_end_hms"
+			if [ "$song_length_hu" -lt "$audio_end_hu" ] ; then
+				# video is longer than audio.  need to add silence to end.
+				# fade only to the end of song length now, because we may have to add silence:
+				sox -v 0.95 "$outdir/audio2_$i_padded.wav" -w -s -c 2 -r 48000 "$outdir/audio2_$i_padded.raw" \
+				fade t "$fade_in_hms" "$song_length_hms" "$fade_out_hms"
+				thetime_hms=`hms $(( $audio_end_hu - $song_length_hu + 100 ))` #plus 10 so sox actually crops.
+				myecho "[dvd-slideshow] Buffering end of audio file with silence for $thetime_hms"
+				sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir/silence.raw" trim 0 "$thetime_hms"
+				cat "$outdir/audio2_$i_padded.raw" "$outdir/silence.raw" > "$outdir/audio.raw" 
+				mv "$outdir/audio.raw" "$outdir/audio2_$i_padded.raw"
+				# hopefully there won't be many times where the audio needs to be buffered 
+				# at the end, so we'll add one extra step to make the coding easier:
+				sox -t raw -s -w -c 2 -r 48000 "$outdir/audio2_$i_padded.raw" "$outdir/audio2_$i_padded.wav"
+				rm "$outdir"/silence.raw
+			fi
+			## fade in by default... may change later
+			sox -v 0.95 "$outdir/audio2_$i_padded.wav" -w -s -c 2 -r 48000 "$outdir/audio2_$i_padded.raw" \
+			fade t "$fade_in_hms" "$audio_end_hms" "$fade_out_hms"
+			if [ $i -eq 0 ] && [ "${audio2_start[$i]}" -ne 0 ] ; then
+				## buffer beginning with silence:
+				thetime_hms=`hms "${audio2_start[$i]}"`
+				myecho "[dvd-slideshow] Buffering beginning of audio file with silence for $thetime_hms"
+				sox -t raw -s -w -c 2 -r 48000 /dev/zero -w -s -c 2 -r 48000 "$outdir/silence.raw" trim 0 "$thetime_hms"
+				cat "$outdir"/silence.raw "$outdir/audio2_$i_padded.raw" > "$outdir/audio.raw" 
+				mv "$outdir/audio.raw" "$outdir/audio2_$i_padded.raw"
+				rm "$outdir"/silence.raw
+			fi
+		fi
+		let i=$i+1
+		myecho "[dvd-slideshow] ###############"
+	done
+	## cat all the audio files together: 
+	ls "$outdir"/audio2_????.raw | xargs -n 1 cat | sox -t raw -w -s -c 2 -r 48000 - "$outdir/audio2.wav"
+	
+	## AC3 audio may be more compatible:
+	if [ "$ac3" -eq 1 ] ; then
+		myecho "[dvd-slideshow] Creating ac3 audio..."
+		checkforprog ffmpeg
+		myecho "[dvd-slideshow] Creating ac3 audio..."
+		check_rm "$outdir/audio2.ac3"
+		ffmpeg -i "$outdir/audio2.wav" -vn -ab 192 -acodec ac3 -ar 48000 -ac 6 "$outdir/audio2.ac3"
+	else
+		## toolame is way faster! (3x in my test)
+		it=`which toolame`
+		if [ -n "$it" ] ; then
+			toolame_version=`toolame -h | head -4 | grep version | awk '{ print $3 }'`
+			myecho "[dvd-slideshow] using toolame $toolame_version..."
+			if [ "$toolame_version" == '0.2m' ] ; then
+				toolame -s 48000 -b 128 "$outdir/audio2.wav" "$outdir/audio2.mp2" 
+			else
+				toolame -s 48 -b 128 "$outdir/audio2.wav" "$outdir/audio2.mp2" 
+			fi
+		else
+			myecho "[dvd-slideshow] using mp2enc"
+			mp2enc -v $verbosity -b 128 -r 48000 -s -o "$outdir/audio2.mp2" < "$outdir/audio2.wav"
+		fi
+	fi
+fi	
+	
+	
+myecho "[dvd-slideshow]########################################"
+myecho "[dvd-slideshow] Multiplexing audio and video."
+myecho "[dvd-slideshow] Some sequence marker warnings here are normal"
+
+## now multiplex the audio and video:
+## -M option is important:  it generates a "single" output file instead of "single-segement" ones
+## if you don't use -M, the dvdauthor command will fail!
+## total mplex bitrate = 128kBit audio + 1500 kBit video + a little overhead
+verbosity=0
+if [ -n "${audio_2[0]}" ] ; then
+	## two audio tracks!
+	if [ "$ac3" -eq 1 ] ; then
+		mplex -V -v $verbosity -M -f 8 -o "$outdir/${slideshow_name}.vob" "$outdir/video.mpg" "$outdir"/audio1.ac3 "$outdir"/audio2.ac3
+	else
+		mplex -V -v $verbosity -M -f 8 -o "$outdir/${slideshow_name}.vob" "$outdir/video.mpg" "$outdir"/audio1.mp2 "$outdir"/audio2.mp2
+	fi
+else  # only one audio track used:
+	if [ "$ac3" -eq 1 ] ; then
+		mplex -V -v $verbosity -M -f 8 -o "$outdir/${slideshow_name}.vob" "$outdir/video.mpg" "$outdir"/audio1.ac3
+	else
+		mplex -V -v $verbosity -M -f 8 -o "$outdir/${slideshow_name}.vob" "$outdir/video.mpg" "$outdir"/audio1.mp2 
+	fi
+fi
+
+verbosity=0
+## now run spumux only if the png was generated:
+if [ "$has_subtitles" -eq 1 ] ; then   
+	spumux -m dvd -v $verbosity -s 0 -P "$outdir/${slideshow_name}".spumux < "$outdir/${slideshow_name}.vob" > "$outdir/tmp.vob"
+	mv "$outdir/tmp.vob" "$outdir/${slideshow_name}.vob"
+else
+#	rm "$outdir/${slideshow_name}".spumux
+	myecho "[dvd-slideshow] No subtitles... removing .spumux file"
+fi
+
+## build the chapters string for passing to dvdauthor:
+myecho "[dvd-slideshow] total chapters=${#chaps[@]}"
+total_chapters="${#chaps[@]}"
+new_total_chapters="$total_chapters"
+factor=1  ;  mod=1
+while [ $new_total_chapters -gt 99 ] ;  ## 99 chapters max
+do
+	factor=$(( 2 * $factor ))
+	new_total_chapters=$(( $new_total_chapters / 2 ))	
+done
+if [ "$new_total_chapters" -ne "${#chaps[@]}" ] ; then
+	myecho "[dvd-slideshow] reduced total chapter markers to $new_total_chapters"
+fi
+a=0 ; b=0
+for chap in "${chaps[@]}"; do
+	if [ $a == 0 ] ; then  # no comma for first chapter
+		## first chapter should always be at 0 time!
+		chaps_string="0"
+		chapter_thumbs[$b]="${thumbs[$a]}"
+		b=$(( $b + 1 ))
+	else
+		# only do every $factor chapters
+		if [ "$mod" -eq "$factor" ] ; then
+			chaps_string="$chaps_string,$chap"
+			chapter_thumbs[$b]="${thumbs[$a]}"
+			b=$(( $b + 1 ))
+			mod=1
+		else
+			mod=$(( $mod + 1 ))
+		fi
+	fi
+	a=$(( $a + 1 ))
+done
+
+myecho "[dvd-slideshow]##########################################"
+myecho "[dvd-slideshow] chapter markers at $chaps_string"
+#echo "$chaps_string" > "$outdir/${slideshow_name}.chap"
+
+#if [ "$submenu" -eq 0 ] ; then
+	## now, create the xml file to pass to dvdauthor
+	#echo '<titleset>' > "$outdir/${slideshow_name}".xml
+	#echo '	<titles>' >> "$outdir/${slideshow_name}".xml
+	#echo '		<pgc>' > "$outdir/${slideshow_name}".xml
+	echo '		<vob chapters="'$chaps_string'" file="'$outdir/${slideshow_name}.vob'"  />' > "$outdir/${slideshow_name}".xml
+	#echo '		</pgc>' >> "$outdir/${slideshow_name}".xml
+	#echo '	</titles>' >> "$outdir/${slideshow_name}".xml
+	#echo '</titleset>' >> "$outdir/${slideshow_name}".xml
+	
+	# cat "$outdir/${slideshow_name}.xml"
+#fi
+
+if [ "$browsable" -eq 1 ] ; then
+	myecho "[dvd-slideshow] Making browsable slideshow..."
+
+	sox -t raw -s -w -c 2 -r 48000 /dev/zero -c 2 -r 48000 "$outdir/audio.wav" trim 0 0.1
+	it=`which toolame`
+	if [ -n "$it" ] ; then
+		toolame_version=`toolame -h | head -4 | grep version | awk '{ print $3 }'`
+		myecho "[dvd-slideshow] using toolame $toolame_version..."
+		if [ "$toolame_version" == '0.2m' ] ; then
+	        	toolame -s 48000 -b 128 "$outdir/audio.wav" "$outdir/audio.mp2"
+	        else
+			toolame -s 48 -b 128 "$outdir/audio.wav" "$outdir/audio.mp2"
+		fi
+	else
+	        echo "[dvd-menu] # using mp2enc"
+	        mp2enc -v 0 -b 128 -r 48000 -s -o "$outdir/audio.mp2" < "$outdir/audio.wav"
+	fi
+
+	top=355
+	bottom=395
+	let i=0
+	menu=1
+	total_files="${#fixedslide[@]}"
+	echo "total files= $total_files"
+	echo "${fixedslide[@]}"
+#	echo '           <menus>' > "$outdir/$slideshow_name"_browse.xml
+	for it in "${fixedslide[@]}"; do
+		echo "file=$it"
+		di=`addzeros $(( $i + 1 ))`
+		encode_menu "$outdir/$it"
+#		if [ "$pal" -eq 1 ] ; then
+#		        ppmtoy4m -v 0 -n 1 -r -F 25:1 -A 59:54 -I p "$outdir/$it" | \
+#			mpeg2enc -q 6 -4 2 -2 1 -v 0 -a 2 -M 2 -f 8 -o "$outdir/menu.mpg"
+#		else
+#		        ppmtoy4m -v 0 -n 1 -r -F 30000:1001 -A 10:11 -I p "$outdir/$it" | \
+#			mpeg2enc -q 6 -4 2 -2 1 -v 0 -a 2 -M 2 -f 8 -o "$outdir/menu.mpg"
+#		fi
+		mplex -v 0 -f 8 -o "$outdir/menu_t.vob" "$outdir/menu.mpg" "$outdir"/audio.mp2
+	
+		if [ "$i" -eq 0 ] ; then
+#			echo '               <pgc entry="root" >' > "$outdir/$slideshow_name"_browse.xml
+			## only works in submenus for now:
+			echo '               <pgc>' > "$outdir/$slideshow_name"_browse.xml
+			## since submenu=1 means there will be one submenu before this,
+			## we need to increment the menu number
+			menu=$(( $menu + 1 ))
+		else
+			echo '               <pgc>' >> "$outdir/$slideshow_name"_browse.xml
+		fi
+		echo '      		<vob file="'$outdir/slide_nav_$di.vob'" pause="inf"/>' >> "$outdir/$slideshow_name"_browse.xml
+		echo '<subpictures>' > "$outdir/browse.spumux"
+		echo '  <stream>' >> "$outdir/browse.spumux"
+	
+		if [ "$i" -eq 0 ] ; then  # first slide
+			echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/browse.spumux"
+			echo "$outdir/menu_mask_ur.png"'" force="yes" >' >> "$outdir/browse.spumux"
+	        	echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+	        	echo ' <button x0="'550'" y0="'$top'" x1="'586'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+	
+			echo '         		<button> jump menu 1; </button>' >> "$outdir/$slideshow_name"_browse.xml
+			echo '         		<button> jump menu '$(( $menu + 1 ))'; </button>' >> "$outdir/$slideshow_name"_browse.xml
+		elif [ "$(( $i + 1 ))" -eq "$total_files" ] ; then # last slide
+			echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/browse.spumux"
+			echo "$outdir/menu_mask_lu.png"'" force="yes" >' >> "$outdir/browse.spumux"
+	        	echo ' <button x0="'124'" y0="'$top'" x1="'180'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+	        	echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+			echo '         		<button> jump menu '$(( $menu - 1 ))'; </button>' >> "$outdir/$slideshow_name"_browse.xml
+			echo '         		<button> jump menu 1; </button>' >> "$outdir/$slideshow_name"_browse.xml
+		else
+			echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/browse.spumux"
+			echo "$outdir/menu_mask_lur.png"'" force="yes" >' >> "$outdir/browse.spumux"
+       		 	echo ' <button x0="'124'" y0="'$top'" x1="'180'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+	        	echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+	        	echo ' <button x0="'550'" y0="'$top'" x1="'586'" y1="'$bottom'" />' >> "$outdir/browse.spumux"
+			echo '         		<button> jump menu '$(( $menu - 1 ))'; </button>' >> "$outdir/$slideshow_name"_browse.xml
+			echo '         		<button> jump menu 1; </button>' >> "$outdir/$slideshow_name"_browse.xml
+			echo '         		<button> jump menu '$(( $menu + 1 ))'; </button>' >> "$outdir/$slideshow_name"_browse.xml
+		fi
+		echo '          </spu>' >> "$outdir/browse.spumux"
+		echo '  </stream>' >> "$outdir/browse.spumux"
+		echo '</subpictures>' >> "$outdir/browse.spumux"
+		echo '                </pgc>' >> "$outdir/$slideshow_name"_browse.xml
+		
+		## spumux the files:
+		spumux -v 0 -P "$outdir/browse.spumux" < "$outdir/menu_t.vob" > "$outdir/slide_nav_$di.vob"
+	
+	        let i=$i+1
+		menu=$(( $menu + 1 ))
+	done
+	if [ "$submenu" -eq 1 ] ; then
+		echo '      <vob file="'$outdir/"$slideshow_name"_submenu.vob'" pause="inf"/>' > "$outdir/$slideshow_name"_submenu.xml
+		echo '		<button> jump thetitle; </button>' >> "$outdir/$slideshow_name"_submenu.xml
+		echo '		<button> jump menu nextmenu; </button>' >> "$outdir/$slideshow_name"_submenu.xml
+	
+#		mv "menu.vob" "$outdir/main_menu.vob"
+#		mv "vmgm.xml" "$outdir/main_vmgm.xml"
+		## create slideshow submenu:
+		dvd-menu -o "$outdir" -n "$orig_slideshow_name" -b "$outdir/background.ppm" -D -t 'Play Slideshow' -t 'Browse Slideshow' -f dummy.vob -f dummy.vob
+		mv "menu.vob" "$outdir/$slideshow_name"_submenu.vob
+#		mv "$outdir/main_menu.vob" "$outdir/menu.vob"
+#		mv "$outdir/main_vmgm.xml" "$outdir/vmgm.xml"
+	fi
+fi
+
+############################################################
+# make chapter selection menu:  (not implemented/working yet)
+
+## in the loops, i is the array index, a is the button index on this menu, and menu is the menu number
+if [ "$chapmenu" -eq 1 ] ; then
+	## draw red squares: leave one pixel between squares...
+	sq_x=$(( ( $width - 100 ) / 6 )) ; sq_y=$(( ( $height - 100 - 75 ) / 4 ))
+	line_x=$(( $sq_x - 4 )) ; line_y=$(( $sq_y - 4 ))
+	convert -size "$sq_x"x"$sq_y" xc:transparent -fill transparent -stroke red -strokewidth 2 -draw "rectangle 0,0 $line_x,$line_y" "$outdir/box.png"
+	sox -t raw -s -w -c 2 -r 48000 /dev/zero -c 2 -r 48000 "$outdir/audio.wav" trim 0 0.1
+	it=`which toolame`
+	if [ -n "$it" ] ; then
+		toolame_version=`toolame -h | head -4 | grep version | awk '{ print $3 }'`
+		myecho "[dvd-slideshow] using toolame $toolame_version..."
+		if [ "$toolame_version" == '0.2m' ] ; then
+	        	toolame -s 48000 -b 128 "$outdir/audio.wav" "$outdir/audio.mp2"
+		else
+	        	toolame -s 48 -b 128 "$outdir/audio.wav" "$outdir/audio.mp2"
+		fi
+	else
+	        echo "[dvd-menu] # using mp2enc"
+	        mp2enc -v 0 -b 128 -r 48000 -s -o "$outdir/audio.mp2" < "$outdir/audio.wav"
+	fi
+
+	top=355
+	bottom=395
+	let i=0
+	let a=0
+	let menu=1
+	total_files="${#chapter_thumbs[@]}"
+#	echo '           <menus>' > "$outdir/$slideshow_name"_chap_$menu.xml
+	for it in "${chapter_thumbs[@]}"; do
+		echo "file=$it"
+#		di=`addzeros $(( $i + 1 ))`
+		# build string to pass to the montage command:
+		if [ "$a" -eq 0 ] ; then
+			chaps_string="${chapter_thumbs[$i]}"
+			box_string="$outdir/box.png"
+		else
+			chaps_string="$chaps_string ${chapter_thumbs[$i]}"
+			box_string="$box_string $outdir/box.png"
+		fi
+		
+#		echo "a=$a total_files=$total_files"
+		## now check to see if we have a full page or last image
+		if [ $a -eq 23 ] || [ $i -eq $(( $total_files -1 )) ] ; then
+			echo "making menu..."
+			## make a chapter selection page:
+			check_rm "$outdir/temp.png"
+			check_rm "$outdir/temp2.png"
+			check_rm "$outdir/buttons.png"
+			check_rm "$outdir/mask.png"
+#			echo "chaps_string=$chaps_string"
+#			echo "box_string=$box_string"
+			montage -background transparent -tile 6x4 -geometry "$sq_x"x"$sq_y" \
+				-borderwidth 0 +frame +shadow +label $chaps_string "$outdir/temp.png"
+			composite -type TrueColor -gravity NorthWest -geometry +50+50 "$outdir/temp.png" "$outdir/slideshow_background.ppm" "$outdir/buttons.png"
+
+			## now create button mask:
+			montage -background transparent -tile 6x4 -geometry "$sq_x"x"$sq_y" \
+				-borderwidth 0 +frame +shadow +label $box_string "$outdir/temp.png"
+			convert -type TrueColor -size "$width"x"$height" xc:transparent "$outdir/temp2.png"
+			composite -depth 8 -colors 3 -gravity NorthWest -geometry +50+50 "$outdir/temp.png" "$outdir/temp2.png" "$outdir/mask.png"
+
+			## now create the menu  (do this in dvd-menu!)
+#			if [ "$menu" -eq 1 ] ; then
+#				echo '               <pgc entry="root" >' > "$outdir/$slideshow_name"_chap_$menu.xml
+#			else
+#				echo '               <pgc>' > "$outdir/$slideshow_name"_chap_$menu.xml
+#			fi
+		
+			echo '      <vob file="'$outdir/"$slideshow_name"_chap_menu_$menu.vob'" pause="inf"/>' > "$outdir/$slideshow_name"_chap_$menu.xml
+
+			echo '<subpictures>' > "$outdir/menu.spumux"
+			echo '  <stream>' >> "$outdir/menu.spumux"
+	
+			if [ "$menu" -eq 1 ] && [ $total_files -gt 24 ] ; then  # first of many chapter menus
+				## add arows to chapter image:
+				echo "First of many menu"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/up_arrow.png" "$outdir/buttons.png" "$outdir/buttons.ppm"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/right_arrow.png" "$outdir/buttons.ppm" "$outdir/buttons.ppm"
+				composite -colors 3 -depth 8 -type TrueColor -gravity South "$outdir/up_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+				composite -colors 3 -depth 8 -type TrueColor -gravity South "$outdir/right_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+#				pngtopnm "$outdir/mask.png" | pnmdepth 3 \
+#				| pnmtopng -transparent "#7f7f7f" > "$outdir/subtitle_out.png"
+#				mv "$outdir/subtitle_out.png" "$outdir/mask.png"
+				encode_menu "$outdir/buttons.ppm"
+
+				mplex -v 0 -f 8 -o "$outdir/menu_t.vob" "$outdir/menu.mpg" "$outdir"/audio.mp2
+				echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/menu.spumux"
+				echo "$outdir/mask.png"'" force="yes" >' >> "$outdir/menu.spumux"
+				x_margin=49; y_margin=49
+				x_thumb=$sq_x; y_thumb=$sq_y
+				## now loop over all the pictures on this menu:
+				for button_number in `seq 1 1 $(( $a + 1 ))` ; do
+					row="$(( ($button_number -1 ) / 6 ))"
+					column="$(( ($button_number -1 ) % 6 ))"
+#					echo "a=$a button_number=$button_number row=$row col=$column"
+					x0=$(( $x_margin+($column*$x_thumb) )); x1=$(( $x0 + $x_thumb ))
+					y0=$(( $y_margin+($row*$y_thumb) )); y1=$(( $y0 + $y_thumb ))
+			        	echo ' 		<button x0="'$x0'" y0="'$y0'" x1="'$x1'" y1="'$y1'" />' >> "$outdir/menu.spumux"
+					echo '         <button> jump title 1 chapter '$button_number'; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				done
+				## add button for navigation arrows:
+	        		echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+		        	echo ' <button x0="'550'" y0="'$top'" x1="'586'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+				echo '		<button> jump vmgm menu 1; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				echo '		<button> jump menu nextmenu; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+			elif [ "$menu" -eq 1 ] && [ $total_files -le 24 ] ; then  # first and only chapter menu
+				## add arows to chapter image:
+				echo "First menu"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/up_arrow.png" "$outdir/buttons.png" "$outdir/buttons.ppm"
+				composite -depth 8 -colors 3 -gravity South "$outdir/up_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+#				pngtopnm "$outdir/mask.png" | pnmdepth 3 \
+#				| pnmtopng -transparent "#7f7f7f" > "$outdir/subtitle_out.png"
+#				mv "$outdir/subtitle_out.png" "$outdir/mask.png"
+				encode_menu "$outdir/buttons.ppm"
+				mplex -v 0 -f 8 -o "$outdir/menu_t.vob" "$outdir/menu.mpg" "$outdir"/audio.mp2
+				echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/menu.spumux"
+				echo "$outdir/mask.png"'" force="yes" >' >> "$outdir/menu.spumux"
+				x_margin=49; y_margin=49
+				x_thumb=$sq_x; y_thumb=$sq_y
+				## now loop over all the pictures on this menu:
+				for button_number in `seq 1 1 $(( $a + 1 ))` ; do
+					row="$(( ($button_number -1 ) / 6 ))"
+					column="$(( ($button_number -1 ) % 6 ))"
+#					echo "a=$a button_number=$button_number row=$row col=$column"
+					x0=$(( $x_margin+($column*$x_thumb) )); x1=$(( $x0 + $x_thumb ))
+					y0=$(( $y_margin+($row*$y_thumb) )); y1=$(( $y0 + $y_thumb ))
+			        	echo ' 		<button x0="'$x0'" y0="'$y0'" x1="'$x1'" y1="'$y1'" />' >> "$outdir/menu.spumux"
+					echo '         <button> jump title 1 chapter '$button_number'; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				done
+				## add button for navigation arrows:
+	        		echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+				echo '		<button> jump vmgm menu 1; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+			elif [ "$(( $i + 1 ))" -eq "$total_files" ] && [ $total_files -gt 24 ]; then # last slide
+				## add arows to chapter image:
+				echo "last menu"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/up_arrow.png" "$outdir/buttons.png" "$outdir/buttons.ppm"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/left_arrow.png" "$outdir/buttons.ppm" "$outdir/buttons.ppm"
+				composite -colors 3 -depth 8 -gravity South "$outdir/up_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+				composite -colors 3 -depth 8 -gravity South "$outdir/left_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+#				pngtopnm "$outdir/mask.png" | pnmdepth 3 \
+#				| pnmtopng -transparent "#7f7f7f" > "$outdir/subtitle_out.png"
+#				mv "$outdir/subtitle_out.png" "$outdir/mask.png"
+				encode_menu "$outdir/buttons.ppm"
+				mplex -v 0 -f 8 -o "$outdir/menu_t.vob" "$outdir/menu.mpg" "$outdir"/audio.mp2
+				echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/menu.spumux"
+				echo "$outdir/mask.png"'" force="yes" >' >> "$outdir/menu.spumux"
+				x_margin=49; y_margin=49
+				x_thumb=$sq_x; y_thumb=$sq_y
+				## now loop over all the pictures on this menu:
+				for button_number in `seq 1 1 $(( $a + 1 ))` ; do
+					row="$(( ($button_number -1 ) / 6 ))"
+					column="$(( ($button_number -1 ) % 6 ))"
+#					echo "a=$a button_number=$button_number row=$row col=$column"
+					x0=$(( $x_margin+($column*$x_thumb) )); x1=$(( $x0 + $x_thumb ))
+					y0=$(( $y_margin+($row*$y_thumb) )); y1=$(( $y0 + $y_thumb ))
+			        	echo ' 		<button x0="'$x0'" y0="'$y0'" x1="'$x1'" y1="'$y1'" />' >> "$outdir/menu.spumux"
+					echo '         <button> jump title 1 chapter '$button_number'; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				done
+				## add button for navigation arrows:
+ 	     		 	echo ' <button x0="'124'" y0="'$top'" x1="'180'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+	        		echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+				echo '		<button> jump menu lastmenu; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				echo '		<button> jump vmgm menu 1; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+			else
+				## add arows to chapter image:
+				echo "middle menu"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/up_arrow.png" "$outdir/buttons.png" "$outdir/buttons.ppm"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/left_arrow.png" "$outdir/buttons.ppm" "$outdir/buttons.ppm"
+				composite -type TrueColor -dissolve 50 -gravity South "$outdir/right_arrow.png" "$outdir/buttons.ppm" "$outdir/buttons.ppm"
+				composite -colors 3 -depth 8 -gravity South "$outdir/up_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+				composite -colors 3 -depth 8 -gravity South "$outdir/left_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+				composite -colors 3 -depth 8 -gravity South "$outdir/right_arrow_mask.png" "$outdir/mask.png" "$outdir/mask.png"
+#				pngtopnm "$outdir/mask.png" | pnmdepth 3 \
+#				| pnmtopng -transparent "#7f7f7f" > "$outdir/subtitle_out.png"
+#				mv "$outdir/subtitle_out.png" "$outdir/mask.png"
+				encode_menu "$outdir/buttons.ppm"
+				mplex -v 0 -f 8 -o "$outdir/menu_t.vob" "$outdir/menu.mpg" "$outdir"/audio.mp2
+				echo -n '      <spu start="00:00:00.00" end="00:00:00.00" highlight="' >> "$outdir/menu.spumux"
+				echo "$outdir/mask.png"'" force="yes" >' >> "$outdir/menu.spumux"
+				x_margin=49; y_margin=49
+				x_thumb=$sq_x; y_thumb=$sq_y
+				## now loop over all the pictures on this menu:
+				for button_number in `seq 1 1 $(( $a + 1 ))` ; do
+					row="$(( ($button_number -1 ) / 6 ))"
+					column="$(( ($button_number -1 ) % 6 ))"
+#					echo "a=$a button_number=$button_number row=$row col=$column"
+					x0=$(( $x_margin+($column*$x_thumb) )); x1=$(( $x0 + $x_thumb ))
+					y0=$(( $y_margin+($row*$y_thumb) )); y1=$(( $y0 + $y_thumb ))
+			        	echo ' 		<button x0="'$x0'" y0="'$y0'" x1="'$x1'" y1="'$y1'" />' >> "$outdir/menu.spumux"
+					echo '         <button> jump title 1 chapter '$button_number'; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				done
+				## add button for navigation arrows:
+ 	     		 	echo ' <button x0="'124'" y0="'$top'" x1="'180'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+	        		echo ' <button x0="'340'" y0="'$top'" x1="'380'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+		        	echo ' <button x0="'550'" y0="'$top'" x1="'586'" y1="'$bottom'" />' >> "$outdir/menu.spumux"
+				echo '		<button> jump menu lastmenu; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				echo '		<button> jump vmgm menu 1; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+				echo '		<button> jump menu nextmenu; </button>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+			fi
+			echo '          </spu>' >> "$outdir/menu.spumux"
+			echo '  </stream>' >> "$outdir/menu.spumux"
+			echo '</subpictures>' >> "$outdir/menu.spumux"
+			## spumux the files:
+			spumux -v 0 -P "$outdir/menu.spumux" < "$outdir/menu_t.vob" > "$outdir/$slideshow_name"_chap_menu_$menu.vob
+#			cp "$outdir/menu.spumux" "$outdir/menu_save.spumux"
+#			echo '         	<post> jump menu 1; </post>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+#			echo '          </pgc>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+#			echo '          </menus>' >> "$outdir/$slideshow_name"_chap_$menu.xml
+			chaps_string=""
+			box_string=""
+			check_rm "$outdir/buttons.png"
+			check_rm "$outdir/buttons.ppm"
+			check_rm "$outdir/mask.png"
+			check_rm "$outdir/menu.spumux"
+
+			let menu=$menu+1
+			a=0
+		fi
+		let i=$i+1
+		let a=$a+1
+	done
+	if [ "$submenu" -eq 1 ] ; then
+		echo '      <vob file="'$outdir/"$slideshow_name"_submenu.vob'" pause="inf"/>' > "$outdir/$slideshow_name"_submenu.xml
+		echo '		<button> jump thetitle; </button>' >> "$outdir/$slideshow_name"_submenu.xml
+		echo '		<button> jump menu nextmenu; </button>' >> "$outdir/$slideshow_name"_submenu.xml
+	
+		mv "$outdir/menu.vob" "$outdir/main_menu.vob"
+		mv "$outdir/vmgm.xml" "$outdir/main_vmgm.xml"
+		## create slideshow submenu:
+		dvd-menu -o "$outdir" -n "$orig_slideshow_name" -b "$outdir/background.ppm" -D -t 'Play Slideshow' -t 'Chapter Select' -f dummy.vob -f dummy.vob
+		mv "menu.vob" "$outdir/$slideshow_name"_submenu.vob
+		mv "$outdir/main_menu.vob" "$outdir/menu.vob"
+		mv "$outdir/main_vmgm.xml" "$outdir/vmgm.xml"
+	fi
+
+fi
+
+cleanup
+

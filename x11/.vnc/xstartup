@@ -1,0 +1,20 @@
+#!/bin/sh
+
+xterm &
+
+for WM in fvwm-crystal fvwm twm mwm xfwm4; do
+	if which $WM > /dev/null; then
+		WINDOW_MANAGER=$WM
+		break
+	fi
+done
+
+echo "Running $WINDOW_MANAGER"
+exec $WINDOW_MANAGER
+
+#exec ~/.xinitrc
+
+#xrdb $HOME/.Xresources
+#xsetroot -solid grey
+#x-terminal-emulator -geometry 80x24+10+10 -ls -title "$VNCDESKTOP Desktop" &
+#x-window-manager &

@@ -1,0 +1,18 @@
+! .Xmodmap is for X; use 'xmodmap -p'
+! see .keymap for non-X console
+
+! http://docs.hp.com/en/5991-7583/ch04s02.html
+
+! Caps Lock is now Esc 
+remove Lock = Caps_Lock
+keysym Caps_Lock = Escape
+
+! windows key on the left = mod4
+! keysym Super_L = Delete
+
+! may want to add this if not already done
+! add mod4 = Super_L Super_R
+
+!asciitilde
+
+

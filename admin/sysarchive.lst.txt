@@ -1,0 +1,267 @@
+# ::: common
+# system config
+/etc/inittab
+/etc/sudoers
+# nameservers and network config
+/etc/resolv.conf
+/etc/hosts
+/etc/hosts.deny
+/etc/hosts.allow
+/etc/exports
+/etc/dhcp3/dhclient.conf
+# knoppix scripts
+/usr/sbin/scanpartitions
+/usr/sbin/fstype
+# dependencies
+/usr/local/bin/xxdiff
+# my scripts
+/etc/init.d/autosource
+/etc/init.d/askrunlevel
+/etc/init.d/askupdatemodules
+/etc/init.d/scanForSwap.sh
+/etc/init.d/docit.sh
+/etc/init.d/delay-services
+/etc/init.d/waitForProcesses.sh
+/usr/local/sbin/*
+# alsa: allows multiple sound apps to output simultaneously
+/etc/asound.conf
+# IP masquerading and firewall
+# /usr/local/sbin/icsharing.sh
+/usr/local/bin/setnumlock
+/usr/local/bin/ppp-go
+/usr/local/bin/ppp-stop
+# pppd files
+/etc/ppp/options
+/etc/ppp/pppscript
+# run after pppd up
+/etc/ppp/ip-up
+/etc/ppp/ip-up.local
+# run after pppd down
+/etc/ppp/ip-down
+/etc/ppp/ip-down.local
+# others
+/etc/apt/sources.list
+/etc/cups/cupsd.conf
+# after editing, remember to rerun 'locale-gen' and 'dpkg-reconfigure localepurge'
+/etc/locale.gen
+# remember to remove any xinetd services from rc?.d
+/etc/xinetd.conf
+# xinetd for samba
+/etc/xinetd.d/netbios-ssn
+/etc/xinetd.d/netbios-ns
+# xinetd for ssh
+/etc/xinetd.d/ssh
+# xinetd for swat
+/etc/xinetd.d/swat
+# shows up after login at a terminal or ssh
+/etc/motd
+# pre-login message
+/etc/issue
+# language config
+/etc/sysconfig/i18n
+/etc/sysconfig/keyboard
+# browser plug-in file handler
+/etc/mozpluggerrc
+# dictionary
+/etc/dictd/dictd.conf
+# source for other programs;  '*.*' so as not to include directories
+/usr/local/src/autosource
+/usr/local/src/sysarchive.lst.txt
+/usr/local/src/smallutils/
+#/usr/local/src/fluxbox
+#/usr/local/src/tablaunch
+
+# ::: blackhat
+/etc/resolv.conf
+/etc/printcap
+/etc/inittab
+/etc/X11/xorg.conf
+/etc/X11/latitudeC840.edid
+/etc/mailcap
+/etc/ssh/sshd_conf
+/etc/samba/smb.conf
+/etc/samba/dhcp.conf
+/etc/localtime
+/etc/modules
+/etc/laptop-mode/laptop-mode.conf
+
+
+# ::: laptop
+/boot/grub/menu.lst
+/boot/config-last
+/etc/fstab
+/etc/network/interfaces
+/etc/X11/XF86Config-4
+/etc/X11/XF86Config-4.nvidia
+/etc/X11/XF86Config-4.nv
+/etc/X11/xorg.conf
+/etc/X11/xorg.conf.nvidia
+/etc/X11/xorg.conf.nv
+/etc/samba/smb.conf
+# system dependent modules to load
+/etc/modules
+# modules aliases and such, created by update-modules.modutils from /etc/modutils/*
+/etc/modules.conf
+/lib/modules/modprobe.conf
+# obsolete:
+#/etc/modprobe.conf
+# contains variables for laptop config
+/etc/laptop
+# services
+/etc/rc.boot/approved
+/etc/rc0.d/approved
+/etc/rc1.d/approved
+/etc/rc2.d/approved
+/etc/rc3.d/approved
+/etc/rc4.d/approved
+/etc/rc5.d/approved
+/etc/rc6.d/approved
+/etc/rcS.d/approved
+
+# ::: home
+# passwords
+/etc/ppp/chap-secrets
+/etc/samba/smbpasswd
+# boot menu
+/boot/grub/menu.lst
+# backup of /usr/src/linux/.config
+/boot/config-2.6.5
+/etc/fstab
+/etc/network/interfaces
+/etc/sysconfig/network-scripts/ifcfg-eth0
+/etc/samba/smb.conf
+/etc/X11/XF86Config-4
+# for nVidia X driver
+/etc/modutils/nvidia
+# system dependent modules to load
+/etc/modules
+# modules aliases and such, created by update-modules.modutils
+/etc/modules.conf
+/lib/modules/modprobe.conf
+# obsolete:
+/etc/modprobe.conf
+# services
+/etc/rc.boot/approved
+/etc/rc0.d/approved
+/etc/rc1.d/approved
+/etc/rc2.d/approved
+/etc/rc3.d/approved
+/etc/rc4.d/approved
+/etc/rc5.d/approved
+/etc/rc6.d/approved
+/etc/rcS.d/approved
+
+# ::: lips
+/boot/grub/grub.conf
+/etc/fstab
+/etc/network/interfaces
+/etc/sysconfig/network-scripts/ifcfg-eth0
+/etc/samba/smb.conf
+/etc/X11/XF86Config-4
+/etc/modutils/aliases
+# for nVidia X driver
+/etc/modutils/nvidia
+# nis yp ntp
+/etc/nsswitch.conf
+/etc/yp.conf
+/etc/ntp.conf
+# system dependent modules to load
+/etc/modules
+# modules aliases and such, created by update-modules.modutils
+/etc/modules.conf
+/lib/modules/modprobe.conf
+# obsolete:
+/etc/modprobe.conf
+# services
+/etc/rc.boot/approved
+/etc/rc0.d/approved
+/etc/rc1.d/approved
+/etc/rc2.d/approved
+/etc/rc3.d/approved
+/etc/rc4.d/approved
+/etc/rc5.d/approved
+/etc/rc6.d/approved
+/etc/rcS.d/approved
+
+# ::: myhome
+$HOME/.Xdefaults-caligulips.ece.utexas.edu
+$HOME/.Xdefaults-linux-black.danville8603
+$HOME/.Xmodmap
+$HOME/.Xresources
+$HOME/.addressbook
+$HOME/.alias
+$HOME/.asnotes.asc
+$HOME/.aterm_menu
+$HOME/.aumixrc
+$HOME/.bash_completion
+$HOME/.bash_logout
+$HOME/.bash_profile
+$HOME/.bashrc
+$HOME/.cvsrc
+$HOME/.dir_colors.src
+$HOME/.dir_colors
+$HOME/.dvipsrc
+$HOME/.emacs
+$HOME/.fehrc
+$HOME/.fetchyahoorc
+$HOME/.fonts.conf
+$HOME/.gotmailrc
+$HOME/.ideskrc
+$HOME/.inputrc
+$HOME/.keymap
+$HOME/.lpoptions.home
+$HOME/.lpoptions.lab
+$HOME/.mailcap
+$HOME/.marks
+$HOME/.mime.types
+$HOME/.mycrontab
+$HOME/.mysnotes.asc
+$HOME/.netrc
+$HOME/.pinerc
+$HOME/.signature-linux
+$HOME/.signature
+$HOME/.tablaunch
+$HOME/.tkpasman.bf
+$HOME/.txt2html.dict
+$HOME/.unikeyrc
+$HOME/.vimrc
+$HOME/.wgetrc
+$HOME/.wmrc
+$HOME/.xautostart
+$HOME/.xbindkeysrc
+$HOME/.xinitrc
+$HOME/.xprofile
+$HOME/.xscreensaver
+$HOME/.xsession
+$HOME/.xxdiffrc
+
+$HOME/.Xapp-defaults/
+$HOME/.a2ps/
+$HOME/.calendar/
+$HOME/.elinks/
+$HOME/.fluxbox/
+$HOME/.fonts/
+$HOME/.gaim/
+$HOME/.gdeskcal/
+$HOME/.gkrellm2/
+$HOME/.gnupg/
+$HOME/.icons/
+$HOME/.idesktop/
+$HOME/.jedit/
+$HOME/.kde/share/config/kcalcrc
+$HOME/.kde/share/config/klipperrc
+$HOME/.mysqlcc/
+$HOME/.ssh/
+$HOME/.vim/plugin
+$HOME/.vim/keymap
+$HOME/.vmware/
+$HOME/.vnc/
+$HOME/.xchat2/
+$HOME/.xfce/
+$HOME/.yudit/
+$HOME/bin
+$HOME/texmf
+$HOME/public_html
+
+# ::: end
+

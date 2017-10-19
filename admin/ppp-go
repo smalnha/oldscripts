@@ -1,0 +1,124 @@
+#!/bin/bash
+
+ifconnect() {
+
+if ! ( ifconfig | grep "P-t-P" >/dev/null ); then
+echo "* NO! not PPP connected. *"
+echo
+else
+exit 0
+fi
+
+if [ -s /var/log/debug ] && ( ps xc 2>/dev/null | grep -q syslogd 2>/dev/null ); then
+echo "Look at /var/log/messages and or debug for more info."
+echo
+else
+exit 0
+fi
+
+echo "Do you want to see /var/log/messages & debug?"
+echo "The PAGER less or more will be used: Q = Quit!"
+echo "The last 30 lines of each file will be shown, there"
+echo -n "may be some overlap from previous attempts: (N/y) : "
+read ans
+
+if [ "$ans" = "y" -o "$ans" = "Y" ]; then
+tail -n 30 /var/log/messages /var/log/debug 2>/dev/null | less -aCMrsi || more -ds || echo "No PAGER found, no more or less."
+grepauth
+else
+grepauth
+fi
+}
+
+grepauth() {
+
+tail -n 30 /var/log/debug 2>/dev/null | grep -i -s "rcvd" > /var/log/setup/tmp/grep.tmp
+
+if ( grep -i -q "auth pap" /var/log/setup/tmp/grep.tmp ); then
+echo
+echo "They seem to be requesting PAP = <auth pap> for authentication."
+echo "I don't know if you're setup for 'PAP' or not."
+echo "Did you answer 'PAP' when you ran pppsetup?"
+echo
+elif ( grep -E -i -q "auth chap msoft|auth chap 80" /var/log/setup/tmp/grep.tmp ); then
+echo
+echo "They seem to be requesting MS-CHAP-80 = <auth chap 80> for authentication."
+echo "I don't know if you're setup for 'MS-CHAP' or not."
+echo "Did you answer 'MS-CHAP' when you ran pppsetup?"
+echo
+elif ( grep -i -q "auth chap" /var/log/setup/tmp/grep.tmp ); then
+echo "They seem to be requesting CHAP = <auth chap> for authentication."
+echo "I don't know if you're setup for 'CHAP' or not."
+echo "Did you answer 'CHAP' when you ran pppsetup?"
+echo
+else
+rm -f /var/log/setup/tmp/grep.tmp
+exit 0
+fi
+
+if ( grep -i -q "callback" /var/log/setup/tmp/grep.tmp ); then
+echo "They seem to be requesting CALLBACK."
+echo "I don't know if you're setup for 'callback' or not."
+echo "Did you answer 'CALLBACK' when you ran pppsetup?"
+echo
+fi
+
+rm -f /var/log/setup/tmp/grep.tmp
+}
+
+if [ "$1" = "" ]; then
+killall -INT pppd 2>/dev/null
+rm -f /var/lock/LCK* /var/run/ppp*.pid
+(/usr/sbin/pppd -detach connect "/usr/sbin/chat -v -f /etc/ppp/pppscript" &) || exit 1
+#read
+#ifconnect
+exit 0
+fi
+
+if [ "$1" = "-q" ]; then
+killall -INT pppd 2>/dev/null
+rm -f /var/lock/LCK* /var/run/ppp*.pid
+(/usr/sbin/pppd connect "/usr/sbin/chat -v -f /etc/ppp/pppscript" 1> /dev/null 2> /dev/null ) || exit 1
+exit 0
+fi
+
+if [ "$1" = "-d" ]; then
+killall -INT pppd 2>/dev/null
+rm -f /var/lock/LCK* /var/run/ppp*.pid
+(/usr/sbin/pppd file "/etc/ppp/options.demand" &) || exit 1
+echo "Demand Dialing Started."
+exit 0
+fi
+
+if [ "$1" = "-h" ]; then
+echo "USAGE: ppp-go    <Make PPP connection, print messages to screen.>"
+echo "USAGE: ppp-go -q <Make PPP connection, do not print messages to screen.>"
+echo "USAGE: ppp-go -r <Remove contents of /var/log/messages & debug files.>"
+echo "USAGE: ppp-go -d <Put pppd in demand dialing mode.>"
+echo "USAGE: ppp-go -h <Help>"
+exit 0
+fi
+
+if [ "$1" = "-r" ]; then
+echo -n "Remove contents of /var/log/messages file? (N/y) : "
+read ans
+if [ "$ans" = "y" -o "$ans" = "Y" ]; then
+cat /dev/null >/var/log/messages
+echo "Contents of /var/log/messages file removed."
+else
+echo "Cancelled."
+fi
+echo -n "Remove contents of /var/log/debug file? (N/y) : "
+read ans
+if [ "$ans" = "y" -o "$ans" = "Y" ]; then
+cat /dev/null >/var/log/debug
+echo "Contents of /var/log/debug file removed."
+exit 0
+else
+echo "Cancelled."
+exit 0
+fi
+fi
+
+echo "USAGE: ppp-go -h <Help>"
+exit 1

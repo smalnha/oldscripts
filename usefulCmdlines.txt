@@ -1,0 +1,13 @@
+
+Create .pdf from .doc
+----------------------
+# sudo apt-get install wv tetex-extra ghostscript
+wvPDF test.doc test.pdf
+
+# sudo apt-get install cups-pdf
+oowriter -pt pdf your_word_file.doc
+
+
+
+
+

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# needs to be in the path for ant (so this cannot be a function)
+
+[ "$JAVA_HOME" ] || { echo "JAVA_HOME not set. Quiting."; exit 1; }
+
+[ -f "$JAVA_HOME/bin/jikes" ] || { echo "$JAVA_HOME/bin/jikes not found."; exit 1; }
+
+exec $JAVA_HOME/bin/jikes $JIKES_OPTIONS "$@"
+

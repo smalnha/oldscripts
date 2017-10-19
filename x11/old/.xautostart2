@@ -1,0 +1,81 @@
+#!/bin/bash
+
+$MY_BIN/online/direct/notify.sh "Running ~/.xautostart2 ..."
+
+. ~/.runSingleton.src
+
+if which conky &> /dev/null; then
+	if [ -r "$HOME/.conky-$HOSTNAME" ]; then
+		CONKYCONFIG="$HOME/.conkyrc-$HOSTNAME"
+	else
+		CONKYCONFIG="$HOME/.conkyrc"
+	fi
+	runSingleton -c "conky" "conky -o -c $CONKYCONFIG"
+elif which gkrellm &> /dev/null; then
+	runSingleton -c "gkrellm" "nice -n 19 gkrellm -w"
+fi
+
+case "$WINDOW_MANAGER" in
+	fluxbox)
+		runSingleton -c "xfce4-panel" "nice -n 19 xfce4-panel"
+	;;
+	fvwm*)
+		runSingleton -c "wmmixer" "wmmixer -w"
+	;;
+	*)
+		if which $HOME/bin/direct/ipager > /dev/null; then
+			[ -f "$HOME/.ipager/ipager-$HOSTNAME.conf" ] && IPAGER_PARAM="-c ~/.ipager/ipager-$HOSTNAME.conf"
+			runSingleton -c "ipager" "nice -n 19 ~/bin/direct/ipager $IPAGER_PARAM"
+		elif which $HOME/.fluxbox/fbpager; then
+			runSingleton -c "fbpager.bin" "nice -n 19 $HOME/.fluxbox/fbpager.bin -w"
+		elif which fluxter > /dev/null; then
+			runSingleton "fluxter -w"
+		fi
+	;;
+esac
+
+# runSingleton -c "rox" "rox -S"
+
+case "$HOSTNAME" in
+	blackhat-skip)
+		if [ "" ] && which gnubiff &> /dev/null; then
+			runSingleton -c "gnubiff" "nice -n 19 gnubiff -n" 
+			(
+			sleep 10  # wait for gnubiff to start
+			wmctrl -x -r gnubiff -b add,skip_taskbar,skip_pager,hidden
+			) &
+		fi
+	;;
+	blackhat)
+		runSingleton "tomboy"
+	;;
+esac
+
+#runSingleton -t 20 "wmxmms -t -n -c xmms.sh"
+
+#runSingleton -c "^akwarp" "~/bin/direct/akwarp -t 0.4"
+
+runSingleton xcb
+#runSingleton \"klipper\"
+#runSingleton \"xstroke -Ad -b 2 -fn 6x13 -logdir $HOME/.xstroke\"
+
+# wifi-radar
+
+
+if [ -f /etc/laptop ] ; then
+   if lsmod | grep "nvidia"; then
+     echo "Module nvidia is loaded, do not suspend!"
+   else
+     case $HOSTNAME in
+      knop) runSingleton "klaptop_check";;
+     esac
+   fi
+else
+   # usually already on
+   echo "skipping setnumlock"
+   # which setnumlock &> /dev/null && setnumlock 
+fi
+
+# must be the last line:
+xautolock -exit
+

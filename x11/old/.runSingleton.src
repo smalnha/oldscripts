@@ -1,0 +1,69 @@
+#!/bin/bash
+
+function isProcessRunning(){
+	#echo ps -u $USER -o command | grep "$1"
+	#if [ -z "$MY_WMpid" ] || ! ps -p $MYWMpid > /dev/null; then
+	#  echo "$WINDOW_MANAGER not running" 
+	#  return 1
+	#fi
+
+	#echo ps -u $USER -o command | grep -v "^grep" | grep -q "$1" 
+	#if ps -u $USER -o command | grep -v "^grep" | grep -q "$1" ; then
+	echo pgrep -U $USER "$1"
+	if pgrep -U $USER "$1" ; then
+		#yes
+		return 0
+	else
+		#no
+		return 1
+	fi
+}
+
+function runSingleton(){
+	export MY_WMpid=`pgrep -U $USER -f "$WINDOW_MANAGER -display ${DISPLAY%%\.*}"`
+	echo MY_WMpid=$MY_WMpid
+	[ -z "MY_WMpid" ] && { echo "No $WINDOW_MANAGER found.  Exiting."; exit 1;}
+	#echo "+ $*"
+	while [ "$*" ] ; do
+		#echo "++ $1 in $*"
+		case "$1" in
+			-q) shift; local quiet=" &> /dev/null "; ;;
+			-t) shift; local sleepTime=$1; shift ;;
+			-c) shift; local searchCommand=$1; 
+			#echo searchCommand=?$searchCommand
+			shift ;;
+			*) local execCommand="$1"; shift ;;
+		esac
+	done
+	#echo "+++ $execCommand"
+	if ! isProcessRunning "${searchCommand:-^$execCommand}" ; then
+		if [ -z "$DISPLAY" ]; then
+			echo "  No DISPLAY $DISPLAY; not running $execCommand";
+			return 3
+		fi
+		if which ${execCommand%% *} &> /dev/null ; then
+			if [ ${sleepTime:-0} -gt 0 ] ; then 
+				echo "--- will execute \"$execCommand\" in $sleepTime seconds"
+				( 	sleep $sleepTime;
+					echo "$sleepTime seconds passed: Running $execCommand $quiet";
+					if ! isProcessRunning "${searchCommand:-^$execCommand}" ; then
+						eval exec $execCommand $quiet
+					else
+						echo "  Seems to be already running: ${searchCommand:-^$execCommand}"
+						return 1
+					fi
+				) &
+			else
+				echo "  Running $execCommand $quiet"
+				eval exec $execCommand $quiet &
+			fi
+		else
+			echo "  !! Not found: ${execCommand%% *}"
+			return 2
+		fi
+	else
+		echo "  Already running: ${searchCommand:-^$execCommand}"
+		return 1
+	fi
+}
+

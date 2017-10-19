@@ -1,0 +1,75 @@
+
+Instructions for using Picasa and organization of folders for DVD production.
+
+
+Final DVD Layout
+================
+
+Main Menu (14 menu items max)
+	SubMenu (9 menu items max)
+
+A total of 14 x 9 = 126 image folders.
+
+
+Directory Layout
+================
+
+DVDTitle
+|
+|-- MainMenuDir1
+|   |-- SubMenuDir1
+|   \-- SubMenuDir2
+|
+|-- MainMenuDir2
+|   |-- SubMenuDir3
+|   \-- SubMenuDir4
+|
+|-- ...
+|
+...
+
+Each SubMenuDirX directory (or folder) contains a set of image files and will be referred to as a slideshow.
+Each slideshow has a title screen, which consists of:
+	1) title  (corresponds to Picasa's "Description" of a folder)
+	2) background image (TITLE.JPG or the first image in the folder)
+
+"MainMenuDir1", "MainMenuDir2", ..., "MainMenuDir14" are used as the labels for menu items in the Main Menu.
+"SubMenuDir1", ..., "SubMenuDir126" are ONLY used as menu item labels in the SubMenu ONLY if a "Place taken" is not specified in Picasa's folder description.
+
+(Note: All menu item labels can be edited later when generating the DVD.)
+
+
+
+	Example
+	-------
+
+2004-LamFamily
+|
+|-- 2004-01
+|   |-- 2004-01-23  (PlaceTaken="Home", Description="First pictures of the year")
+|   \-- 2004-01-24  (PlaceTaken="Backyard", Description="Following day")
+|
+\-- 2004-02
+    |-- 2004-02-14  (PlaceTaken="Valentine's Day", Description is blank, TITLE.JPG is in the directory)
+    \-- 2004-02-29  (PlaceTaken="Leap Year", Description="Taking advantage of an extra day", TITLE.JPG is in the directory)
+
+
+	Resulting "2004-LamFamily" DVD
+	------------------------------
+
+The Main Menu contains the following menu items: 
+	1) 2004-01
+	2) 2004-02
+
+The "2004-01" submenu contains the following menu items: 
+	1) Home       (title slide has "First pictures of the year" written on top of the first image)
+	2) Back yard  (title slide has "Following day" written on top of the first image)
+	3) Main Menu (goes back to the main menu)
+The "2004-02" submenu contains the following menu items: 
+	1) Valentine's Day   (title slide has "Valentine's Day" written on top of TITLE.JPG)
+	2) Leap Year         (title slide has "Taking advantage of an extra day" written on top of TITLE.JPG)
+	3) Main Menu (goes back to the main menu)
+
+
+
+

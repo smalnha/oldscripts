@@ -1,0 +1,140 @@
+#!/bin/bash
+
+if [ "$HOSTNAME" == "$MY_HOMEMACHINE" ] || [ "$HOSTNAME" == "dell6k" ] || [ "$HOSTNAME" == "knop" ]  ; then
+	export CVSROOT=:ext:${USER}@${MY_CVSSERVER}:/share/CVS
+	export CVS_RSH=ssh
+else
+	export CVSROOT=:pserver:${USER}@${MY_CVSSERVER}:/share/CVS
+fi
+
+# cvs(1) completion
+_cvs ()
+{
+    local cur prev
+    COMPREPLY=()
+    cur=${COMP_WORDS[COMP_CWORD]}
+    prev=${COMP_WORDS[COMP_CWORD-1]}
+# echo
+# echo curr=$curr
+# echo prev=$prev
+# echo $COMP_WORDS # array of words on commandline
+# echo $COMP_CWORD # number of words on commandline
+
+    if [ $COMP_CWORD -eq 1 ] || [ "${prev:0:1}" = "-" ]; then
+        COMPREPLY=( $( compgen -W 'add admin checkout commit diff \
+        export history import log rdiff release remove rtag status \
+        tag update' $cur ))
+    else
+        COMPREPLY=( $( compgen -f $cur ))
+    fi
+    return 0
+}
+complete -F _cvs cvs
+
+# aliases
+# don't recurse; list only locally modified files
+alias cvsStatusLocal='cvs status -l | grep --after-context=4 Modified'
+# recurse; list only locally modified files
+alias cvsStatus='cvs status -R | grep --after-context=4 Modified'
+
+# cvs update defaults: recurse
+# prune empty dirs,
+# alias cvsUpdate='cvs upd -P'
+# get clean files; create directories
+alias cvsClean='cvs upd -CAd'
+# reset any sticky tags; create directories
+alias cvsUnstick='cvs upd -Ad'
+# don't recurse
+alias cvsCleanLocal='cvs upd -CAl'
+alias cvsUpdateLocal='cvs upd -l'
+function cvsCommitLocal(){
+	cvsCommit "$1" -l
+}
+# simulate update without sticky
+alias cvsSimulate='cvs upd -p'
+# commit with message argument
+function cvsCommit(){
+	if [ ! -e "$1" ] ; then
+		local COMMENT="$1"
+		shift
+	fi
+	echo "cvs com -m \"$COMMENT\" $@"
+	cvs com -m "$COMMENT" $@
+}
+# to unlock a file
+alias cvsAdminUnlock='cvs admin -u'
+
+alias cvsAddRecurse='find . -type f -print0| xargs -0 cvs add'
+
+# list files not in cvs
+alias cvsUnknowns='cvs -n upd | grep ?'
+alias cvsUnknownsLocal='cvs -n upd -l | grep ?'
+
+cvsTrash(){
+	[ -d $MY_TRASH/cvsTrash ] || mkdir $MY_TRASH/cvsTrash
+	mv -v .\#* $MY_TRASH/cvsTrash
+}
+function cvsHtmlLog(){
+	local repos=`cat CVS/Repository`
+	$BROWSER "https://www.lips.utexas.edu/cgi-bin/cvsweb.cgi/$repos/$1" &
+}
+
+function cvsDiff(){
+	if [ "$DISPLAY" ] || [ "$WINDOWID" ]; then
+		# graphical
+		cp -v $1 $1.local
+		#cvs -Q update -p $1 > $trashdir/$1
+		cvs update -C $1
+		xxdiff $1 $1.local
+		echo "Try meld"
+		ask "Keep local? (default: yes) " 0
+		if [ $? -eq 0 ] ; then
+			mv -fv $1.local $1
+		else
+			mv -fv $1.local $HOME/NOBACKUP/trash/cvs
+		fi
+	else
+		cvs diff --width=$COLUMNS $*
+		echo "----------------------------------------------------------------"
+		echo "Also: cvs diff --width=$COLUMNS --suppress-common-lines $*"
+	fi
+}
+
+export MY_HOMECVSDIRS="bin .fluxbox .a2ps .fonts .gkrellm2 .ssh .vim .idesktop .gdeskcal .gnupg .elinks .gaim .Xapp-defaults .mysqlcc .vmware .vnc .yudit"
+
+function cvsHomeCommit(){
+	[ ! -d $MY_BIN ] && return 1
+	cd $MY_BIN/..
+	cvs commit -lm "$1" . 
+	if [ -z "$1" ] ; then 
+		eval cvs commit $MY_HOMECVSDIRS
+	else
+		eval cvs commit -m "$1" $MY_HOMECVSDIRS
+	fi
+}
+function cvsHomeUpdate(){
+	[ ! -d $MY_BIN ] && return 1
+	cd $MY_BIN/..
+	cvs update -l . 
+	eval cvs update -d $MY_HOMECVSDIRS
+}
+
+# if "it is in the way" errors, try 'cvsToUnix -rm'
+function cvsToUnix(){
+	echo "Making cvs directories compatible with Unix (if directories were checked out under Windows)"
+
+	for i in `find . -iname CVS -type d`; do
+		if [ "$1" = "-f" ] || [ -e $i/Root ] ; then 
+			shift
+			dos2unix $i/Entries
+			dos2unix $i/Repository
+		fi
+		if [ "$1" = "-rm" ] || [ -e $i/Root ] ; then
+			rm -f $i/Root
+		fi
+		if [ "$1" = "-e" ] || [ -e $i/Root ] ; then
+			# need to have Root file for cvs gui clients (i.e., LinCVS)
+			echo "$CVSROOT" > $i/Root
+		fi
+	done
+}

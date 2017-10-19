@@ -1,0 +1,1982 @@
+#!/usr/bin/perl -w
+###############################################################################
+# Name: FetchYahoo
+# Purpose: retrieves messages from Yahoo! Mail, saving them to a local spool
+# Description:  FetchYahoo is a Perl script that downloads mail from a Yahoo!
+#               webmail account to a local mail spool. It is meant to replace
+#               fetchmail for people using Yahoo! mail since Yahoo!'s POP
+#               service is no longer free. It downloads messages to a local
+#               mail spool, including all parts and attachments . It then
+#               deletes messages unless requested not to. It can also forward
+#               messages to another e-mail address or to an IMAP server.
+# Author:  Ravi Ramkissoon
+# Author's E-mail: ravi_ramkissoon@yahoo.com
+# License: Gnu Public License
+# Homepage: http://fetchyahoo.sf.net
+# Created: 04.12.02
+# Modified: 08.26.05
+my $version = "2.8.9";
+#
+# Installation instructions are in the INSTALL file.
+
+# for the latest version and changes check, in order:
+# http://fetchyahoo.sf.net
+# http://freshmeat.net/projects/fetchyahoo
+###############################################################################
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+###############################################################################
+# md5_hex modified from Digest::Perl::MD5 module - relevant copyright info
+# This library is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Copyright 2000 Christian Lackas, Imperia Software Solutions
+# Copyright 1998-1999 Gisle Aas.
+# Copyright 1995-1996 Neil Winton.
+# Copyright 1991-1992 RSA Data Security, Inc.
+#
+# Distributed here under the GPL as allowed under the Perl license.
+###############################################################################
+use strict;
+use integer;
+
+use Getopt::Long ();
+use HTTP::Request::Common qw(GET POST);
+use HTTP::Cookies ();
+use LWP::UserAgent ();
+use MIME::Head ();
+sub GetRedirectUrl($);
+sub GetEmailAddress($);
+sub ParseConfigFile();
+sub Localize($);
+sub EmptyTrash($);
+sub EmptyBulk($);
+sub Logout();
+sub Delete(@);
+sub MarkUnread(@);
+sub MyDie($);
+sub MyGet;
+sub checkExternal();
+sub GetFormInputs();
+
+# code generation for md5_hex routine
+gen_code();
+
+# Configure these or use the interactive input
+my $username = 'yahoo-user-name';
+# this can be a password or an md5_hex hashed password
+my $password = 'yahoo-password';
+
+# mail spool, mbox file and procmail configs
+my $useSpool  = 1;      # set this to 0 to disable outputting to a file/folder
+# if spoolName ends with a / we output in maildir format to that directory
+my $spoolName = '/var/spool/mail/local-user-name';
+my $spoolMode = 'append';       # either 'append', 'pipe' or 'overwrite'
+                                # use 'pipe' for procmail or other filter
+                                # ignored if spoolName is a maildir directory
+
+# set the below to 1 to remember which messages were downloaded and not
+# download them again - especially useful with the leaveUnread option
+my $useMsgIDArchive=0;
+my $msgIDArchiveFile='path to file to store message IDs in';
+
+# IMAP configuration
+my $useIMAP  = 0;      # set this to 1 to save to IMAP folder
+my $imapServer = 'imap.example.com';
+my $imapPort = '143';
+my $imapUser = 'imap-user-name';
+my $imapPass = 'imap-password';
+my $imapMailbox = 'INBOX';
+
+# proxy configs
+my $useProxy = 0;               # set this to 1 to enable use of a web proxy
+my $proxyHost = 'proxy.example.com';
+my $proxyPort = 80;
+my $proxyUser = 'proxyAuthenicationUserName';
+my $proxyPass = 'proxyAuthenicationPassword';
+
+my $useHTTPS = 1;               # set this to 0 to turn off HTTPS and transfer
+                                # all information in plaintext (INSECURE)
+                                # using HTTPS requires Crypt::SSLeay or
+                                # IO::Socket::SSL
+
+# mail forwarding configs
+my $useForward = 0;             # set this to 1 to enable mail forwarding
+my $mailHost = 'outgoing.example.com'; # your smtp outgoing mail server
+
+# list of e-mail addressess to be forwarded to
+my $sendToAddresses = [ 'me@example.com' , 'me2@example.com' ];
+
+# the e-mail address to use as the from address. This is used only if the
+# message being forwarded has no From header
+my $sendFromAddress = 'me@example.com'; 
+
+# if you want to send msgs using sendmail, set the below 2 parameters
+my $useSendmail = 0;
+my $sendmail = "/usr/sbin/sendmail"; # Location of sendmail
+
+# daemon mode config. If this is 0, the program runs only once and terminates.
+# Otherwise this is the number of minutes between successive mail checks.
+my $repeatInterval = 0;
+
+# the below defaults can be overridden from the commandline
+my $newOnly = 0;        # download all (0) or just new (1) messages
+my $noDelete = 0;       # to not delete messages set this to 1
+my $quiet = 0;          # to suppress regular (non-error) output set this to 1
+my $noerrors = 0;  # to suppress error output, set this to 1
+my $noDownload = 0;     # to delete msgs and not download them, set this to 1
+my $listMsgs = 0;       # to list messages, set this to 1
+my $emptyBulk = 0;      # to empty bulk folder (always happens before fetch)
+my $emptyTrashAfter = 0;  # to empty trash after downloading msgs set this to 1
+my $emptyTrashBefore = 0; # to empty trash b4 downloading msgs, set this to 1 
+my $logout = 0;          # to have fetchyahoo logout at the end, set this to 1
+my $leaveUnread=0;    # to leave messages as unread on the server,set this to 1
+                # only makes sense to use this with noDelete
+my $noFromLine=0;     # if you use a program/filter which doesn't expect a 
+                      # From_ line appended to the message, set this to 1
+my $statusOnly=0;     # if you want only the number of messages, set this to 1
+my $box = 'Inbox';    # to download from a different folder, set this
+                      # eg 'Bulk' will get messages from the Bulk folder
+my $getExternal=0;  # if set to 1, messages from external mailboxes
+                           # configured on Yahoo will also be retrieved
+# IMPORTANT Yahoo gives trouble when downloading over 90 messages at a time
+# Setting this to more than 90 (or 0 for unlimited) may cause problems.
+my $maxMessages = 90; # max number of messages to download in one go
+my $maxSize = 0; # skip msgs larger than N kB
+my $warningLevel = 0;  # warn if server mailbox usage is >= N% (ignore if 0).
+
+# use LWP::Debug qw(+);        # uncomment this for lots of debugging messages
+
+#### These attributes are user-editable but the defaults should be sufficient
+my $retries = 3;       # number of times to retry a failed session
+my $retryPause = 5;    # initial time, in seconds, to sleep between retries
+                       # time is doubled on each subsequent retry
+my $userAgent = 
+"Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.7.8) Gecko/20050512 Firefox/1.0.4";
+
+#### Nothing below here is intended for user configuration
+my $loginURL = 'http://login.yahoo.com/config/login';
+my $HTTPSloginURL = 'https://login.yahoo.com/config/login';
+my $mailURL = "http://mail.yahoo.com";
+my $versionString = "FetchYahoo Version " . $version . "\n" .
+  "Homepage: http://fetchyahoo.sourceforge.net\n";
+my $maxMidsPerURL = 75;
+my $localHostname;
+eval ("use Socket");
+if ($@) { $localHostname = 'localhost'; }
+else {
+  eval("use Sys::Hostname");
+  if ($@) { $localHostname = 'localhost'; }
+  else { ($localHostname) = eval("gethostbyname(hostname)"); }
+}
+
+# other variables used
+my $overwriteFlag = 0;
+my $spool;
+my $proxyURL;
+my $smtp;
+my $altConfigFile;
+my $maildirDeliveryCount = 0;
+my $exit_code = 0;     # default exit code
+my $retryCount = $retries;
+my $imap = undef;
+
+# flag for help, version and md5hex
+my $helpFlag = 0;
+my $versionFlag = 0;
+my $getMD5HexFlag = 0;
+my $useReadKey=0;
+
+my %map  = ();     # hash for extension->MIMEtype mappings
+
+my $help = <<EOF
+$0 [options] 
+
+Retrieves messages from the inbox of a Yahoo user using the web interface
+and stores them in the specified local spool/mbox file. Deletes the messages
+downloaded unless requested not to.
+
+Options specified on the commandline take precedence over options specified
+in the configuration file, which in turn take precedence over options hardcoded
+within the fetchyahoo program file.
+
+--version                      print the version and exit
+--help                         display help showing the program options
+--quiet                        suppress regular (non-error) messages
+--noerrors                     suppress error messages
+--listmessages                 list messages in mail folder
+--onlylistmessages             only list messages in mail folder. This combines
+                               --listmessages, --nodownload and --nodelete
+
+--configfile=config-file       use config-file as the configuration file
+--username=yahoousername       use yahoousername as the login
+--password=pass                use pass as the password. pass can also be an
+                               md5_hex hashed password.
+--spoolfile=spool-file         use spool-file as the file to spool messages to
+                               if spool-file ends with / it is treated as a
+                               maildir format directory
+--folder=folder-name           download messages from folder-name instead
+
+--nohttps                      use an insecure plaintext login instead of HTTPS
+--newonly                      only download new (i.e. unread) messages
+--nodelete                     do not delete messages after downloading them
+--nodownload                   do not download messages 
+                               (but still delete them/empty trash if requested)
+
+--append                       append messages to spool-file (default)
+--overwrite                    overwrite spool-file (instead of appending)
+--pipe                         pipe messages to a program instead of
+                               a spool-file
+--msgidarchivefile=file-name   save message IDs to this file and do not download
+                               messages whose IDs have been saved to this file
+
+--emptytrashbefore             empty trash before downloading messages
+--emptytrashafter              empty trash after downloading messages
+--emptybulk                    empty bulk mail folder (always before fetch)
+--leaveunread                  leave messages unread on the server
+--repeatinterval=N             check for mail every N minutes (daemon mode)
+--statusonly                   only get number of messages
+--getexternal                  retrieve messages from external mailboxes also
+--maxmessages=N                download at most N messages in one run
+                               setting this to over 90 may cause problems
+                               [DEFAULT 90]
+--maxsize=N                    do not download any msg larger than N kB
+                               setting to 0 will turn off this check
+                               [DEFAULT 0]
+--warninglevel=N               warn if the server mailbox is >= N% full
+                               setting to 0 will turn off the warning
+                               [DEFAULT 0]
+
+--nofromline                   leave out the leading From_ line
+--logout                       log out of Yahoo! when done
+
+--md5hex                       print the MD5 hex hash value of a password
+                               entered interactively (can be used instead of
+                               password in configuration files)
+
+--proxyhost=proxy.host.org     hostname for proxy [ DEFAULT off ]
+--proxyport=N                  port for proxy [DEFAULT 80 ]
+--proxyuser=proxy-user         username for proxy authentication[ DEFAULT none]
+--proxypass=proxy-pass         password for proxy authentication[ DEFAULT none]
+
+--imaphost=imap.host.org       hostname of IMAP sever [ DEFAULT off ]
+--imapport=N                   port for IMAP server [DEFAULT 143 ]
+--imapuser=imap-user           username for IMAP authentication[ DEFAULT none]
+--imappass=imap-pass           password for IMAP authentication[ DEFAULT none]
+--imapmailbox=imap-mailbox     IMAP mailbox [ DEFAULT INBOX]
+
+--noquiet                      opposite of --quiet [DEFAULT]
+--errors                       opposite of --noerrors [DEFAULT]
+--delete                       opposite of --nodelete [DEFAULT]
+--nolistmessages               opposite of --listmessages [DEFAULT]
+--nologout                     opposite of --logout [DEFAULT]
+--noempty                      do not empty trash or bulk [DEFAULT]
+--allmsgs                      get all msgs (not only new ones) [DEFAULT]
+--download                     opposite of --nodownload [DEFAULT]
+--includefromline              opposite of --nofromline [ DEFAULT ]
+--markread                     opposite of --leaveunread [ DEFAULT ]
+--nostatusonly                 opposite of --statusonly [ DEFAULT ]
+--nogetexternal                opposite of --getexternal [ DEFAULT ]
+--https                        use a secure login via HTTPS [ DEFAULT ]
+
+At least username and password must be specified somewhere (commandline, 
+config-file or in fetchyahoo)
+
+EOF
+;
+
+# S T A R T   M A I N   P R O G R A M
+
+# parse input options for an alternate config file
+Getopt::Long::Configure('pass_through');
+Getopt::Long::GetOptions ('configfile=s'  => \$altConfigFile);
+
+# config file options take precedence over hardcoded (within-file)  options
+ParseConfigFile();
+
+# get other command-line input options. These take precedence over all others
+Getopt::Long::Configure('no_pass_through');
+Getopt::Long::GetOptions
+(
+ 'newonly'           => \$newOnly,
+ 'help'              => \$helpFlag,
+ 'md5hex'            => \$getMD5HexFlag,
+ 'version'           => \$versionFlag,
+ 'noDelete'          => \$noDelete,
+ 'username=s'        => \$username,
+ 'password=s'        => \$password,
+ 'spoolfile=s'       => \$spoolName,
+ 'quiet!'            => \$quiet,
+ 'noerrors'          => \$noerrors,
+ 'nodownload'        => \$noDownload,
+ 'emptybulk'         => \$emptyBulk,
+ 'emptytrashafter'   => \$emptyTrashAfter,
+ 'emptytrashbefore'  => \$emptyTrashBefore,
+ 'logout!'           => \$logout,
+ 'statusonly!'       => \$statusOnly,
+ 'repeatinterval=i'  => \$repeatInterval,
+ 'noempty'           => sub {$emptyTrashAfter=0;$emptyTrashBefore=0
+                               ;$emptyBulk=0},
+ 'download'          => sub { $noDownload=0; },
+ 'allmsgs'           => sub { $newOnly=0; }, 
+ 'delete'            => sub { $noDelete=0; },
+ 'leaveunread'       => \$leaveUnread,
+ 'nofromline'        => \$noFromLine,
+ 'markread'          => sub { $leaveUnread=0; },
+ 'includefromline'   => sub { $noFromLine=0; },
+ 'errors'            => sub { $noerrors=0; },
+ 'pipe'              => sub { $spoolMode='pipe'; },
+ 'append'            => sub { $spoolMode='append'; },
+ 'overwrite'         => sub { $spoolMode='overwrite'; },
+ 'folder=s'          => \$box ,
+ 'getexternal!'      => \$getExternal,
+ 'proxyhost=s'       => sub { $proxyHost= $_[1] ; $useProxy=1;},
+ 'proxyport=s'       => \$proxyPort,
+ 'proxyuser=s'       => \$proxyUser,
+ 'proxypass=s'       => \$proxyPass,
+ 'imaphost=s'        => sub { $imapServer= $_[1] ; $useIMAP=1;},
+ 'imapport=s'        => \$imapPort,
+ 'imapuser=s'        => \$imapUser,
+ 'imappass=s'        => \$imapPass,
+ 'imapmailbox=s'     => \$imapMailbox,
+ 'https!'            => \$useHTTPS ,
+ 'maxmessages=i'     => \$maxMessages,
+ 'maxsize=i'         => \$maxSize,
+ 'warninglevel=i'    => \$warningLevel,
+ 'listmessages!'     => \$listMsgs,
+ 'onlylistmessages!' => sub {$listMsgs=1; $noDownload=1;$noDelete=1;},
+ 'msgidarchivefile=s'=> sub {$useMsgIDArchive=1 ; $msgIDArchiveFile=$_[1];},
+ 'nomsgidarchivefile'=> sub {$useMsgIDArchive=0; }
+);
+# set some required variables
+
+if ($box eq 'bulk' || $box eq 'Bulk') { $box = "%40B%40Bulk"; }
+if ($box eq 'sent') { $box = "Sent"; }
+if ($box eq 'draft') { $box = "Draft"; }
+if ($box eq 'trash') { $box = "Trash"; }
+if ($box eq 'inbox') { $box = "Inbox"; }
+
+my $homesuff = '/ym/ShowFolder?box='.$box;
+my $msgsuff = $homesuff.'&PRINT=1&Nhead=f&toc=1&MsgId=';
+$box =~ s/%/%%/g ;                  # fix  for template which is used in printf
+my $bodyPartUrlTemplate = "/ym/ShowLetter?box=".$box."&MsgId=%s&bodyPart=%s";
+
+# For a proxy with authentication, create a URL like
+# http://user:pass@host:port/
+unless ($proxyPass eq 'proxyAuthenicationPassword') {
+    $proxyHost = $proxyPass . '@' . $proxyHost; }
+unless ($proxyUser eq 'proxyAuthenicationUserName') {
+    $proxyHost = $proxyUser . ':' . $proxyHost; }
+
+$proxyURL = 'http://' . $proxyHost . ':' . $proxyPort;
+$proxyURL = $proxyHost . ':' . $proxyPort if ($useHTTPS) ;
+
+if ( $useProxy && $proxyHost eq "proxy.hostname.com" &&
+     exists ($ENV{'HTTP_PROXY'}) ) {
+    $proxyURL = $ENV{'HTTP_PROXY'}; 
+}
+
+if ( $useProxy && $proxyHost eq "proxy.hostname.com" &&
+     exists ($ENV{'http_proxy'}) ) {
+    $proxyURL = $ENV{'http_proxy'}; 
+}
+
+# if useMsgIDArchive is set, an archive file must be chosen
+if ( $useMsgIDArchive && $msgIDArchiveFile eq "path to file to store message IDs in") {
+    print "If you are using an archive to store message IDs (useMsgIDArchive=1), you must" .
+        " specify a msgIDArchiveFile to store the message IDs in .\n\n";
+    print $versionString . "\n" . $help; exit;
+}
+
+$loginURL = $HTTPSloginURL if ($useHTTPS) ;
+
+# unbuffer STDOUT
+select((select(STDOUT), $| = 1)[0]);
+
+# check if help or version was requested
+if ($helpFlag) { print $versionString . "\n" . $help; exit; }
+if ($versionFlag) { print $versionString; exit; }
+
+# if --md5hex was requested, do that and exit
+if ($getMD5HexFlag) {
+
+  my $password2 = '';
+
+  # check for Term::ReadKey
+  eval ("use Term::ReadKey");
+  if ($@) {
+  print "\n* WARNING * Term::ReadKey is not installed. ".
+    "Your password will be displayed on the screen.\n\n".
+    "Either Ctrl-C and install Term::ReadKey or ".
+    "make sure noone is looking at your screen.\n\n";
+  }
+  else { $useReadKey = 1; }
+
+  gethash:
+  print "Please enter the password to hash: ";
+  if ($useReadKey) {
+    ReadMode('noecho');          #hide output
+    $password = ReadLine(0);     #get input
+    ReadMode('normal');          #back to normal mode
+  }
+  else { $password = <STDIN>; }
+  chomp($password);
+
+  print "\nPlease enter the password again: ";
+  if ($useReadKey) {
+    ReadMode('noecho');          #hide output
+    $password2 = ReadLine(0);     #get input
+    ReadMode('normal');          #back to normal mode
+  }
+  else { $password2 = <STDIN>; }
+  chomp($password2);
+
+  if ($password ne $password2) {
+    print "\n\nPasswords do not match, try again.\n\n";
+    goto gethash;
+  }
+
+  print "\n\nThe md5hex password hash is " . md5_hex($password) . "\n" .
+  "You can use this instead of your password when using FetchYahoo.\n\n";
+  exit;
+}
+
+# check for common errors (forgot to edit variables)
+if ($username eq 'yahoo-user-name')  {
+    print "No username specified.\nPlease enter your Yahoo! username: ";
+    $username = <STDIN> ;
+    chomp($username);
+    $password = 'yahoo-password';
+}
+
+if ($password eq 'yahoo-password')  {
+
+  # check for Term::ReadKey
+  eval ("use Term::ReadKey");
+  if ($@) {
+  print "\n* WARNING * Term::ReadKey is not installed. ".
+    "Your password will be displayed on the screen.\n\n".
+    "Either Ctrl-C and install Term::ReadKey or ".
+    "make sure noone is looking at your screen.\n\n";
+  }
+  else { $useReadKey = 1; }
+
+  print "Please enter your Yahoo! password: ";
+  if ($useReadKey) {
+    ReadMode('noecho');          #hide output
+    $password = ReadLine(0);     #get input
+    ReadMode('normal');          #back to normal mode
+  }
+  else { $password = <STDIN>; }
+  chomp($password);
+}
+
+if ( $useSpool && $spoolName eq "/var/spool/mail/local-user-name") {
+    print "No mailbox or mailspool specified.\n";
+    print "Please enter the path to and name of your mail spool or mailbox ".
+      "(eg /var/spool/mail/username): ";
+    $spoolName = <STDIN>;
+    chomp($spoolName);
+}
+
+if ($spoolMode eq 'append') {
+    $spool = '>>' . $spoolName ; }
+elsif ($spoolMode eq 'pipe') {
+    $spool = '|' . $spoolName ; }
+elsif ($spoolMode eq 'overwrite') {
+    $spool = '>' . $spoolName ; }
+else { $spool = '>>' . $spoolName ; }     # the default is to append
+
+if ( $useProxy && $proxyHost eq "proxy.hostname.com") {
+    print "If you are using a web proxy (use-proxy=1), you must " .
+  "specify the proxy hostname.\n\n";
+    print $versionString . "\n" . $help; exit; 
+}
+
+if (!$quiet) {
+    if ($useHTTPS) { print "Logging in securely via SSL as $username " }
+    else { print "Logging in insecurely via plaintext as $username " }
+    print "on " . (scalar localtime) . "\n";
+
+    if ($useProxy) { print "Using $proxyURL as a webproxy.\n" }
+    if ($repeatInterval>0) { 
+      print "Running in daemon mode. Will check every $repeatInterval" . 
+      " minutes.\n"; }
+}
+
+if ($useForward) {  # check that everything is setup for mailforwarding
+
+  if ( !scalar(@$sendToAddresses) ||
+       grep(/\@example.com$/,@$sendToAddresses) ) {
+    print "If you are forwarding the messages (use-forward=1), you must " .
+      "specify the e-mail address to forward to.\n\n";
+    print $versionString . "\n" . $help; exit; 
+  }
+
+  if (  !$useSendmail and $mailHost eq 'outgoing.example.com') {
+    print "If you are forwarding the messages (use-forward=1), you must " .
+      "specify an smtp server" . 
+      " (localhost if you have one installed locally).\n\n";
+    print $versionString . "\n" . $help; exit; 
+  }
+
+  # make sure Net::SMTP is installed for mail-forwarding
+  if (!$useSendmail) { eval ("use Net::SMTP"); }
+  if ($@) {
+    die "Net::SMTP is not installed. It must be installed to use ". 
+      "mail-forwarding\n";
+  }
+
+  # Try to find the sendmail binary (look in common locations)
+  if ($useSendmail && !(-x $sendmail)) {
+    if (-x "/usr/sbin/sendmail") {
+       $sendmail = "/usr/sbin/sendmail";
+    }
+    elsif (-x "/usr/lib/sendmail") {
+       $sendmail = "/usr/lib/sendmail";
+    }
+    else {
+      die "Couldn't find local sendmail program";
+    }
+  }
+
+  # we only setup the smtp connection if we find messages
+}
+
+if ($useIMAP) {  # check that everything is setup for IMAP forwarding
+
+    if ( $imapServer eq 'imap.example.com') {
+  print "If you are saving messsages to an IMAP folder(use-imap=1), " .
+      "you must specify an IMAP server" . 
+      " (localhost if you have one installed locally).\n\n";
+  print $versionString . "\n" . $help; exit; 
+    }
+
+    if ( $imapUser eq 'imap-user-name') {
+  print "If you are saving messsages to an IMAP folder(use-imap=1), " .
+      "you must specify an IMAP user name.\n\n";
+  print $versionString . "\n" . $help; exit; 
+    }
+
+    if ( $imapPass eq 'imap-password') {
+  print "If you are saving messsages to an IMAP folder(use-imap=1), " .
+      "you must specify an IMAP password.\n\n";
+  print $versionString . "\n" . $help; exit; 
+    }
+
+    # make sure Mail::IMAPClient is installed for IMAP-forwarding
+    eval ("use Mail::IMAPClient");
+    if ($@) {
+  die "Mail::IMAPClient is not installed. It must be installed to save ". 
+      "messages to an IMAP folder.\n";
+    }
+
+}
+
+# if daemon mode is chosen, fork into the background
+if ($repeatInterval>0) {
+    print "Forking into the background.\n" unless $quiet ;
+    $SIG{CHLD} = 'IGNORE';
+    my $pid = fork;
+    exit if $pid;
+    die "Couldn't fork into background: $!" unless defined ($pid) ;
+}
+
+$retryCount = $retries ;  # reset the number of retries
+
+startfetch:
+
+$exit_code = 0;   # reset the exit code
+
+# grab login cookies
+my $ua = LWP::UserAgent->new;
+my $cookie_jar = HTTP::Cookies->new();
+my $url = "";
+my $request;
+
+$ua->cookie_jar($cookie_jar);
+$ua->agent($userAgent);
+if ($useProxy) {
+    if ($useHTTPS) {
+      $ua->proxy('http', 'http://' . $proxyHost . ':' . $proxyPort);
+      $ENV{HTTPS_PROXY} = $proxyURL;
+    } else {
+      $ua->proxy('http', $proxyURL);
+    }
+}
+
+# this does the initial login, we need to get the challenge and send a hash
+# of the password and the challenge
+my %PROPS = GetFormInputs();
+if (!defined $PROPS{'.challenge'}) {
+  # we have failed logging in, print a message and continue
+  # better luck next time
+    MyDie("Failed: Couldn't get challenge to log in. Try again later.\n");
+}
+
+$request = POST $loginURL, [ %PROPS ];
+
+$request->content_type('application/x-www-form-urlencoded');
+$request->header('Accept' => '*/*');
+$request->header('Allowed' => 'GET HEAD PUT');
+
+my $content = MyGet($request, 'log in', 1);
+
+if ( $content =~ /Invalid Password/ ) {
+    MyDie("Failed: Wrong password entered for $username\n"); 
+}
+
+if ( $content =~ /ID does not exist/ ) {
+    MyDie("Failed: Yahoo user $username does not exist\n");
+}
+
+# parses out quota used/limit (by looking for 'xx% ... xxMB')
+if ( $content =~ /(\d+(?:\.\d+)?)%.+?(\d+(?:\.\d+)?)([MG]B)/ ) {
+  my ($percentUsed, $limitMB, $limitUnit) = ($1, $2, $3);
+  printf "You are using %s%% of your %s%s limit.\n",
+    $percentUsed, $limitMB, $limitUnit unless $quiet;
+  if( $warningLevel && $percentUsed >= $warningLevel){
+    printf "Warning: You are using %s%% of your %s%s limit ".
+        "(warning-level=%d%%).\n", $percentUsed, $limitMB, $limitUnit, $warningLevel
+        unless $noerrors;
+  }
+}
+
+# set localization strings
+my %strings;
+my $language;
+
+if ( $url =~ /https?:\/\/(..)\./ ) {
+  $language = $1;
+  %strings = Localize($1);
+}
+else {
+  # sometimes yahoo tells us to try again, we pass the message along
+  # this occurs so frequently that i'm not treating it as an error
+  if ($content =~ /^HTTP\/1.1 999 This page is currently unavailable/) {
+    print "Yahoo! mail is currently unavailable. Please try again later.\n\n"
+      unless $quiet;
+  }
+  else # i'd like to know if this is ever reached and why
+  {
+    print "$content\n\n$url\n\n",
+          "Could not get main Yahoo mail page.\n\n",
+          '<<< Please check http://fetchyahoo.sf.net for a version newer ' ,
+          " than this version ( $version ) \n",
+          'If there is no newer version, please e-mail this output ',
+          'to ravi_ramkissoon@yahoo.com >>>'."\n\n"
+       unless $noerrors || $retryCount; # supress error unless the last try
+  }
+  $exit_code=1;
+  goto fetch_exit;
+}
+
+if ($box eq '%%40B%%40Bulk') { $box = 'Bulk'; }
+if (!$quiet) {
+    print "Successfully logged in as $username.\n"; 
+    print "Country code : $language\tFolder: $box\tVersion: $version\n";
+}
+
+# setup URLs
+$url =~ /(http:\/\/.*?)\// ;
+my $baseurl = $1;
+my $homeurl = $baseurl . $homesuff ;
+my $msgurl = $baseurl . $msgsuff ; 
+my $logouturl = $baseurl . "/ym/Logout";
+my $numurls = 0;
+my @delurls;
+my @unreadurls;
+my $emptyurl;
+
+$delurls[0] = $homeurl . "\&DEL=Delete";
+$unreadurls[0] = $homeurl . "\&UNR=1";
+
+# get all message IDs
+my $msgcount = 0;
+my $pagecount = 0;
+my $numMsgs ;
+my $startMsg ;
+my $endMsg ;
+my @msgids ;
+my $crumb;
+# JWB -- Added @msgnew to keep the original status of a message
+my @msgnew;
+
+# if requested, print summaries for external mailboxes
+if ($getExternal) { checkExternal(); }
+
+if ( $newOnly) {
+    print "Only retrieving new messages\n" unless $quiet;
+    $homeurl = $homeurl . "\&Nview=u";
+}
+
+if ( $leaveUnread) {
+    print "Leaving messages unread on the server\n" unless $quiet;
+}
+
+if ( $useMsgIDArchive) {
+     print "Using ".$msgIDArchiveFile." as a message ID archive\n"
+       unless $quiet;
+}
+
+# empty trash before downloading messages, if requested
+# parsing the empty trash URL from a parsed inbox summary page does NOT work
+# because it changes message IDs so deleting messages would fail
+if ($emptyTrashBefore) { EmptyTrash($content);}
+
+if ($emptyBulk) {
+    my $tmpurl = $baseurl . "/ym/Folders" ;
+    $request = GET  $tmpurl ;
+    $content = MyGet($request, 'get Folders listing for Empty Bulk', 0);
+    if ($content ne "FAILED") { EmptyBulk($content); }
+}
+
+# loop over all inbox summary pages
+startDownload:
+my $mainPage;
+do {
+
+  # get summary page
+  my $tmpurl = $homeurl . "\&Npos=$pagecount&order=down&sort=date" ; 
+  $request = GET  $tmpurl ;
+  $mainPage = MyGet($request, 'get Folder $box listing', 1);
+
+  #parse for number of messages
+  if ($mainPage =~ /$strings{'msg_range'}/) { 
+    $startMsg = $1 ;
+    $endMsg = $2 ;
+    $numMsgs = $3;  }
+  elsif ($mainPage =~ /$strings{'new_msg_range'}/) { 
+    $startMsg = $1 ;
+    $endMsg = $2 ;
+    $numMsgs = $3;  }
+  elsif ($mainPage =~ /$strings{'no_msgs'}/ ||
+         $mainPage =~ /$strings{'new_no_msgs'}/ ||
+         (defined $strings{'new_no_msgs_2'} &&
+            $mainPage =~ /$strings{'new_no_msgs_2'}/) ) {
+    if (!$quiet) { print "There are no messages in the $box folder.\n"; }
+
+     # if requested, empty trash
+    if ($emptyTrashAfter) { EmptyTrash($mainPage); }
+
+    if ($logout) { Logout; }                    # if requested, logout
+
+    goto fetch_exit;
+
+  }
+  elsif ($mainPage=~/There\s*was\s*a\s*problem\s*accessing\s*your\s*mailbox/ &&
+         ($mainPage =~ /This\s*is\s*most\s*likely\s*a\s*temporary\s*problem/ ||
+          $mainPage =~ /We\s*recommend\s*clicking\s*the/)) {
+    MyDie "Could not find Yahoo! folder $box. Remember that folder names are ".
+      "case-sensitive.\n" unless $noerrors;
+  }
+  # this error message occurs often enough that I'm not treating it as a
+  # failure
+  elsif ($mainPage =~ /999\s*This\s*page\s*is\s*currently\s*unavailable/) {
+
+    print "Yahoo! mail is currently unavailable. Please try again later.\n\n"
+      unless $quiet;
+
+    if ($logout) { Logout; }                    # if requested, logout
+
+    $exit_code=2;
+    goto fetch_exit;
+  }
+  else {
+    if (!$noerrors && !$retryCount) { # only show error on last try
+      print $mainPage . "\n\n",
+          "Parsing the main summary web page has failed.\n",
+          '<<< Please check http://fetchyahoo.sf.net for a version newer ' ,
+          " than this version ( $version ) \n",
+          'If there is no newer version, please e-mail this output ',
+          'to ravi_ramkissoon@yahoo.com >>>'."\n\n";
+    }
+
+    $exit_code=3;
+    goto fetch_exit;
+  }
+
+  # tw used to have the startMsgs and endMsgs interchanged
+  #if ($language eq 'tw' && defined $endMsg && defined $startMsg) {
+  #  my $tmp_msgs = $startMsg ;
+  #  $startMsg = $endMsg;
+  #  $endMsg = $tmp_msgs;
+  #}
+
+  if ($statusOnly) {
+    print "$numMsgs message".(($numMsgs>1)?"s":"") . " found in the $box folder.\n";
+
+    # if requested, empty trash
+    if ($emptyTrashAfter) { EmptyTrash($mainPage); }
+
+    if ($logout) { Logout; }                    # if requested, logout
+
+    goto fetch_exit;
+  }
+
+  # Download at most $maxMessages messages
+  if ($maxMessages > 0 &&
+      ( $endMsg > $maxMessages ||
+        ($endMsg == $maxMessages && $numMsgs>$maxMessages))) {
+    print "\n\nOnly the first " . $maxMessages . " of " . $numMsgs .
+      " is being downloaded.\n\n" unless $quiet;
+    $endMsg = $numMsgs = $maxMessages;
+  }
+
+  print "Getting Message ID(s) for message(s) $startMsg - $endMsg.\n" unless
+  $quiet;
+
+  # new parsing block by Arvind96
+  # this can be later modified to let ppl select which messages to delete
+  my $tmpPage = $mainPage;
+  my $tmpLine = '';
+
+  # the long regex matches and removes a single message
+  while ( $tmpPage =~ s/^.*?^<tr class=msg(new|old).*?^\s*<td.*?name="Mid".value="([^"]+)".*?^\s*<td>(.*?)<.*?^\s*<td>.*?^\s*<a.href=.*?ShowLetter\?MsgId=([^&]+)&.*?\n(.*?)\n.*?^\s*<td .*?>(.*?)<.*?^\s*<td>(.*?)<//ms ) {
+    if (! $2 eq $4) {
+        print "\nWarning: message ID's $2 and $4 don't match.\n" unless $quiet;
+    }
+
+    if ($1 eq 'new') { $msgnew[$msgcount] = 1; }
+    else { $msgnew[$msgcount] = 0; }
+
+    $msgids[$msgcount] = $2 ;
+    $msgcount = $msgcount + 1;
+
+    if ($listMsgs) {
+        $tmpLine = "$1 \"".substr($3, 0, 15)."\" - ".substr($5, 0, 50).
+          " " . substr($6, -5)." $7";
+        $tmpLine =~ s/\s+/\ /g;
+        if ($newOnly) { $tmpLine =~ s/^(new|old) //; }
+        print $msgcount . ". " . $tmpLine . "\n";
+    }
+  }
+
+  $pagecount = $pagecount+1 ;            # next summary page
+} until $numMsgs == $endMsg ;
+
+# truncate excess message IDs
+if ($msgcount > $maxMessages) {
+  $msgcount = $maxMessages ;
+  @msgids = @msgids[ 0..($maxMessages-1)] ;
+}
+
+if ($mainPage =~ /name=\".crumb\" value=\"(.*?)\"/) {
+  $crumb = $1; } 
+elsif (!$noDelete)  {
+  print "Warning: Can't get crumb.\n" unless $noerrors; }
+
+# if we need to empty the trash later, save the page so we can parse it later
+if ($emptyTrashAfter) { $emptyurl=$mainPage; }
+
+if (!$quiet) { print "Got $msgcount Message IDs\n"; }
+my $delCount = 0;
+my $downloadCount = 0;
+my $unreadCount = 0;
+
+# if useMsgIDArchive is chosen, remove message IDs already downloaded and store
+# new message IDs
+if ($useMsgIDArchive) {
+
+if (!-e $msgIDArchiveFile){
+        open MSGIDSPOOL, "> $msgIDArchiveFile";
+        print "Creating message ID archive\n" unless $quiet;
+        close MSGIDSPOOL;
+}
+open MSGIDSPOOL, "< $msgIDArchiveFile" or
+        die "Can't open output: $msgIDArchiveFile";
+
+my @msgidlist=<MSGIDSPOOL>;
+close MSGIDSPOOL;
+my $msgidcount=0;
+for($msgidcount=0;$msgidcount<@msgids;){
+        my $msgidfound=0;
+        my $fmsgidcount=0;
+        for($fmsgidcount=0;$fmsgidcount<@msgidlist;){
+                my $temp=$msgidlist[$fmsgidcount];
+                chomp($temp);
+                if ($temp eq $msgids[$msgidcount]){
+    # delete the message ID from the file if we are deleting the message
+                        if(! $noDelete){
+                                open MSGIDSPOOL, "+< $msgIDArchiveFile" or
+                                        die "Can't open output: $msgIDArchiveFile";
+                                splice(@msgidlist,$fmsgidcount,1);
+                                seek(MSGIDSPOOL,0,0);
+                                print MSGIDSPOOL @msgidlist;
+                                truncate(MSGIDSPOOL,tell(MSGIDSPOOL));
+                                close MSGIDSPOOL;
+# add message to deletion list (because it is being removed from msg ids list)
+                                $delurls[$numurls] = $delurls[$numurls] . "\&Mid=$msgids[$msgidcount]";
+                                $delCount = $delCount+1;
+                                if ($delCount%$maxMidsPerURL == 0) {
+                                  $numurls=$numurls+1;
+                                  $delurls[$numurls] = $homeurl . "\&DEL=Delete";
+                                  $delurls[$numurls-1] = $delurls[$numurls-1] . "\&.crumb=$crumb";
+                                }
+                        }
+                        $msgidfound=1;
+                        last;
+                }
+                else {
+                        $fmsgidcount++;
+                }
+        }
+        if($msgidfound==1){
+                splice(@msgids,$msgidcount,1);
+        }
+        else{
+                if($noDelete){
+                        open MSGIDSPOOL, ">> $msgIDArchiveFile" or
+                                die "Can't open output: $msgIDArchiveFile";
+                        print MSGIDSPOOL "$msgids[$msgidcount]\n";
+                        close MSGIDSPOOL;
+                }
+                $msgidcount++;
+        }
+}
+
+print "Got $msgidcount new messages \n" unless $quiet; 
+}
+# msgidSpool code ends
+
+if ($noDownload) {
+  if (!$quiet) { print "Not downloading messages\n"; }
+  foreach my $msgid (@msgids) { 
+    # add message to deletion list
+    $delurls[$numurls] = $delurls[$numurls] . "\&Mid=$msgid";
+    $delCount = $delCount+1;
+    if ($delCount%$maxMidsPerURL == 0) {
+      $numurls=$numurls+1;
+      $delurls[$numurls] = $homeurl . "\&DEL=Delete";
+      $delurls[$numurls-1] = $delurls[$numurls-1] . "\&.crumb=$crumb";
+    }
+  }
+  goto startDelete;
+}
+
+@msgids = reverse(@msgids);         # download msg IDs in correct order
+@msgnew = reverse(@msgnew);         # JWB -- reverse array of Unread statuses
+my $loopcnt = 0;
+
+# loop over all Message IDs
+foreach my $msgid (@msgids) { 
+
+  # JWB -- Only add to unread list if the message was originally unread
+  if($msgnew[$loopcnt++])
+  {
+    # add message to unread list
+    $unreadurls[$numurls] = $unreadurls[$numurls] . "\&Mid=$msgid";
+    $unreadCount = $unreadCount+1;
+  }
+
+  my $tmpurl = $baseurl . sprintf($bodyPartUrlTemplate, $msgid, "HEADER") ; 
+  my $header;
+  $request = GET $tmpurl;
+  $header = MyGet($request, "get header of message $msgid. It will be "
+                  . "skipped and not deleted", 0, $maxSize);
+
+  if ($header eq "FAILED") { next; }
+
+  my @foo = split /\n/, $header;
+  my $fromLine = shift @foo;     # save From_ line for later
+  my $fromName; my $fromRest;
+
+  my $mimeHead = new MIME::Head(\@foo);
+
+  # if we can't parse at least To or From or Date assume this has failed
+  unless ($mimeHead->get('From') || $mimeHead->get('To')
+          || $mimeHead->get('Date') || $mimeHead->get('Return-Path')
+          || $mimeHead->get('X-Apparently-To'))  {
+    print $mimeHead->as_string;
+    print "\nCan't find message $msgid. It will be skipped and not deleted.".
+          "\n" unless $quiet ;
+    next;
+  }
+
+  # This signals that Yahoo is sending us an error message, not a real header
+  if ($mimeHead->get('Connection')
+      && $mimeHead->get('Connection')=~ /close/) {
+    print "\n\nYahoo has closed the connection. We cannot download\n".
+    "any more messages in this session. Stopped at message\n\t\t".
+    ( 1 + $downloadCount ) . "\n\n";
+    last;
+  }
+
+  # Yahoo!'s From_ line is broken, fix it
+  my $validEmailPattern = "[^ \<\>]+@[^ \<\>]+\.[^ \>\n]+";
+  if (!defined ($fromLine)) {
+    # can't parse From_ line, make a new one
+    $fromName = '-';
+    $fromRest = scalar localtime ;
+  }
+  else {
+    if ( $fromLine =~
+        /From .*?($validEmailPattern)>?\s+((Mon|Tue|Wed|Thu|Fri|Sat|Sun).*)$/ )
+        {
+          $fromName = $1;
+          $fromRest = $2;
+        }
+    else {
+      # can't parse From_ line, make a new one
+      $fromName = '-';
+      $fromRest = scalar localtime;
+    }
+  }
+
+  # Do we have a better fromName?
+  unless ( $fromName =~ /$validEmailPattern/ ) {
+    if( defined $mimeHead->get('From') && 
+        $mimeHead->get('From') =~ /($validEmailPattern)/ )  {
+      $fromName = $1;
+    }
+    else {
+      if ( $mimeHead->get('Return-Path') =~ /($validEmailPattern)/ ) {
+           $fromName = $1;
+      }
+    }
+  }
+
+  $fromLine = "From " . $fromName . " " . $fromRest . "\n";
+
+  # add one of 'Received' or 'X-Apparently-To' date if 'Date' tag isn't found [dim0n, 1/8/2005]
+  unless ($mimeHead->get('Date')) {
+    $mimeHead->add('Date', scalar localtime);
+    my @rec = $mimeHead->get('Received');
+    push @rec, $mimeHead->get('X-Apparently-To');
+    foreach (@rec) {
+      if (/((?:Sun|Mon|Tue|Wen|Thu|Fri|Sat), .*)$/) {
+        $mimeHead->replace('Date', $1);
+        last;
+      }
+    }
+  }
+
+  # Remove Yahoo! Mail's internal headers
+  $mimeHead->delete("Content-Length");
+  $mimeHead->delete("X-RocketMail");
+  $mimeHead->delete("X-RocketUID");
+  $mimeHead->delete("X-RocketMIF");
+  $mimeHead->delete("X-RocketRCL");
+  $mimeHead->delete("X-Track");
+  $mimeHead->delete("X-Rocket-Server");
+  $mimeHead->delete("X-Rocket-Track");
+  # Seen on a Bulk Folder message on Fri Nov 21 14:25:42 2003
+  $mimeHead->delete("X-Rocket-Spam");
+  # This isn't removed since it is definitely useful to tell
+  # that Yahoo has marked this message as Spam
+  # $mimeHead->delete("X-YahooFilteredBulk");
+
+  # Add our own header
+  $mimeHead->add('X-FetchYahoo',"version ".$version." MsgId ".$msgid);
+
+  # This fixes a bug affecting non-English latin characters
+  # is it ok if we always change CTE from quoted-printable->8bit ?
+  if ($mimeHead->get('Content-Transfer-Encoding') &&
+      $mimeHead->get('Content-Transfer-Encoding') =~
+      /^(quoted-printable|base64)$/i) {
+    $mimeHead->add("X-FetchYahoo-Content-Transfer-Encoding-Autoconverted",
+                   "from ".$mimeHead->get('Content-Transfer-Encoding').
+                   " to 8bit");
+    $mimeHead->replace("Content-Transfer-Encoding", "8bit");
+  }
+
+  my $message = $mimeHead->as_string."\n"; # message we are constructing
+
+  $request = GET $baseurl . sprintf($bodyPartUrlTemplate, $msgid, "TEXT");
+
+  my $rawPart = MyGet($request, "get body of message $msgid.\n"
+                      . "Message will be skipped and not deleted.\n", 0);
+
+  if ($rawPart eq "FAILED" ) { next; }
+
+  $message .= $rawPart . "\n\n";
+  $message =~ s/\n>From /\n>>From /g ; # slightly extended RFC 822
+  $message =~ s/\nFrom /\n>From /g ;
+
+  # add message to deletion list
+  $delurls[$numurls] = $delurls[$numurls] . "\&Mid=$msgid";
+  $delCount = $delCount+1;
+  if ($delCount%$maxMidsPerURL == 0) {
+    $numurls=$numurls+1;
+    $delurls[$numurls] = $homeurl . "\&DEL=Delete";
+    $delurls[$numurls-1] = $delurls[$numurls-1] . "\&.crumb=$crumb";
+    $unreadurls[$numurls] = $homeurl . "\&UNR=1";
+    $unreadurls[$numurls-1] = $unreadurls[$numurls-1] . "\&.crumb=$crumb";
+  }
+
+  # send the message where requested (mbox or e-mail addresses)
+  DeliverMessage( \$message, $fromLine, $mimeHead );
+
+  $downloadCount++;
+  # Progress indicator
+  if (!$quiet) {
+    if ($downloadCount%5) {
+      print ".";
+    } elsif ($downloadCount%10) {
+      print "5";
+    } else {
+      printf("[%d]\n", $downloadCount);
+    }
+  }
+
+}
+
+if (!$quiet) { print "\nFinished downloading $downloadCount messages.\n"; }
+
+if ($leaveUnread) {
+  $unreadurls[$numurls] = $unreadurls[$numurls] . "\&.crumb=$crumb";
+  MarkUnread(@unreadurls);
+}
+
+startDelete:
+if ( ! $noDelete) {
+  $delurls[$numurls] = $delurls[$numurls] . "\&.crumb=$crumb";
+  Delete(@delurls);
+}
+else {
+  print "Messages have not been deleted.\n" unless $quiet;
+}
+
+if ($emptyTrashAfter) { EmptyTrash($emptyurl); }
+
+fetch_exit:
+
+# logoutif requestedand no errors
+if ($logout && !$exit_code) { Logout(); }
+
+ # if this fetch has failed retry up to $retries times
+ # else if $repeatInterval is non-zero, loop after $repeatInterval minutes
+ if ($retryCount-- > 0 && $exit_code) { # retry request on errors
+    sleep($retryPause);
+    print "\nRetry #".($retries-$retryCount)." (error $exit_code).\n" unless $quiet;
+    $retryPause = $retryPause * 2; # exponentially increase the delay
+    goto startfetch;
+ }
+ elsif ($repeatInterval > 0) {
+    sleep (60*$repeatInterval);
+    goto startfetch ;
+ }
+
+ exit $exit_code;
+
+
+###############################################################################
+# Subroutines
+###############################################################################
+
+# return the URL we're redirected to
+sub GetRedirectUrl($) {
+  my $response = $_[0];
+  my $url = $response->header('Location');
+
+  if ($url =  $response->header('Location')) {
+    # the Location URL is sometimes non-absolute which is not allowed, fix it
+    local $URI::ABS_ALLOW_RELATIVE_SCHEME = 1;
+    my $base = $response->base;
+    $url = $HTTP::URI_CLASS->new($url, $base)->abs($base);
+  }
+  elsif ($response->content =~
+         /^<html>\s*<head>\s*<script language=\"/ &&
+         #$response->content =~ /<\/html>\s*$/ &&
+         $response->content =~
+         /<meta http-equiv="Refresh" content="0; url=(http:\/\/.*?)">/) {
+    $url = $1;
+  }
+  else {
+    return undef;
+  }
+
+  return $url;
+}
+
+sub GetEmailAddress($) {
+  my $addr = $_[0];
+
+  # match A @ B
+   if ($addr =~ /([.0-9a-zA-Z-_]+)@([.0-9a-zA-Z-_]+)/) {
+     return $1 . "@" . $2;
+   }
+   else {
+     return undef;
+   }
+}
+
+# parameters (request, action_being_attempted, die_if_failed, max_size_kb)
+# if die_if_failed is 0 failure will be denoted by returning "FAILED"
+sub MyGet {
+  my $request = $_[0];
+  my $response;
+  my $tries;
+  my $max_size = $_[3] || 0;
+  $ua->max_size( ($max_size*1024) || undef );
+  my $content='';
+
+  for($tries=0;$tries<4;$tries++) {
+
+    # linear backoff. sleep for 0, 1, 3, 5 seconds
+    if ($tries) { sleep(2*$tries - 1); }
+
+    if ( $useProxy
+         && !($proxyUser eq "proxyAuthenicationUserName")
+         && !($proxyPass eq "proxyAuthenicationPassword") ) {
+        $request->proxy_authorization_basic($proxyUser, $proxyPass);
+    }
+    $response = $ua->simple_request($request);
+
+    while ( $response->is_redirect ||
+            ( $response->content =~ /^<html>\s*<head>\s*<script language=\"/ &&
+            #$response->content =~ /<\/html>\s*$/ &&
+              $response->content =~
+              /<meta http-equiv="Refresh" content="0; url=(http:\/\/.*)">/)) {
+      $cookie_jar->extract_cookies($response);
+      $url = GetRedirectUrl($response);
+      if (!$url || !defined ($url)) { next; }
+      $request = GET $url;
+      if ( $useProxy
+           && !($proxyUser eq "proxyAuthenicationUserName")
+           && !($proxyPass eq "proxyAuthenicationPassword") ) {
+        $request->proxy_authorization_basic($proxyUser, $proxyPass);
+      }
+      $response = $ua->simple_request($request);
+    }
+
+    # abort if message > max_size. This is a non-fatal error.
+    my $clientAborted = $response->header('Client-Aborted') || '';
+    if( $max_size && $clientAborted eq 'max_size' ){
+    # print $request->uri()."\n".$response->status_line."\n" unless $noerrors;
+      print "Warning: Message exceeded $max_size kB. Couldn't " . $_[1] . ".\n"
+        unless $noerrors;
+      return "FAILED";
+    }
+
+    $content =  $response->content;
+
+    # check for broken pages
+    if ( $content =~ /^<html><head><title>Yahoo! -\n404/ ||
+         ($content=~/^<!--web/ && 
+          $content=~/There was a problem accessing your account/) ||
+         $content =~ /^<html><head><title>Document Error: Data follows/ ||
+         ($content=~/^<!--web/ && 
+          $content=~
+          /he request your browser sent was missing some needed information/)||
+         ($content=~/^<html>/ && 
+          $content=~
+          /<title>Sorry, this page is not currently available<\/title>/ ) ||
+         (($content=~/^<html>/ || $content=~/^HTTP/)&& 
+          $content=~/999\s*This\s*page\s*is\s*currently\s*unavailable/ ) ||
+         ($content=~/^<!--web/ && 
+          $content=~
+          /Your login session has expired/ )  ||
+         ($content=~/^<!--web/ && 
+          $content=~
+          /Invalid Mailbox State/ ) ||
+         ($content=~/^<html>/ &&
+          $content=~ /A JavaScript implementation of the RSA Data Security/ &&
+          $content=~ /These functions implement the basic operation for each round of the/) )
+      { next; }
+
+    if ( $response->is_success ) { return $content; }
+  }
+
+  if ( $response->is_error
+       && $request->url->scheme eq "https"
+       && $response->message =~ /LWP::Protocol::https/ )
+    {
+      die "HTTPS secure login is now turned on by default.\n\n".
+        "Unable to login securely with HTTPS. You may need to install ".
+        "the Crypt::SSLeay or IO::Socket::SSL perl module. Please ".
+        "check the webpage or INSTALL file for information on how to ".
+        "install perl modules.\n\n".
+        "Alternatively you can turn off HTTPS secure login to use an".
+        "insecure plaintext login (-nohttps or edit the config file).\n";
+    }
+
+  if ($_[2]) {
+    print $content . "\n\n" unless $noerrors;
+    print $request->uri().' ' . $response->is_success . "\n" .
+      $response->status_line . "\n" unless $noerrors;
+    MyDie("Failed: Couldn't " . $_[1] . ".\n");
+  }
+  else {
+    print $content . "\n\n" unless $noerrors;
+    print $request->uri()."\n" . $response->is_success . "\n" .
+      $response->status_line . "\n" unless $noerrors;
+    print"Warning: Couldn't " . $_[1] . ".\n" unless $noerrors;
+    return "FAILED";
+  }
+
+}
+
+
+sub MyDie($) {
+  if ($repeatInterval > 0) {
+    sleep (60*$repeatInterval);
+    goto startfetch ;
+  }
+
+  die shift unless $noerrors ;
+  die ;
+}
+
+sub GetFormInputs() {
+  my $tries;
+  my ($i, @PROP_NAME, @PROP_VALUE, %PROPS);
+
+  for($tries=0;$tries<3;$tries++) {
+    $request = GET  $mailURL ;
+    my $main_page = $ua->simple_request($request);
+    my @main_page = split(/\n/, $main_page->content);
+    foreach (@main_page) {
+            if (/^.*<input type=\"?hidden\"? ([^>]*>).*$/) {
+                    my @TAG = split(/[>\s]/, $1);
+                    for ($i = 0; $i <= $#TAG; $i++) {
+                            $TAG[$i] =~ s/\"//g;
+                            my @PROP = split("=", $TAG[$i]);
+                            if ($PROP[0] eq "name") {
+                                    push (@PROP_NAME, $PROP[1]);
+                            }
+                            elsif ($PROP[0] eq "value") {
+                                    push (@PROP_VALUE, $PROP[1]);
+                            }
+                    }
+            }
+    }
+    for ($i = 0; $i <= $#PROP_NAME; $i++) {
+            $PROPS{$PROP_NAME[$i]} = $PROP_VALUE[$i];
+    }
+    if (defined $PROPS{'.challenge'}) { $tries=4; }
+  }
+  if ($tries == 3) { return %PROPS; } # we failed,PROPS{challenge} not defined
+  $PROPS{'.save'} = 1;
+  $PROPS{'.js'} = 1;
+  $PROPS{'.hash'} = 1;
+  $PROPS{'.md5'} = 1;
+  $PROPS{'.persistent'} = "";
+  $PROPS{'login'} = $username;
+  # see if the password is already hashed
+  if ($password =~ /[0-9a-f]{32}/)
+  { # password is already hashed
+    $PROPS{'passwd'} = md5_hex(($password . $PROPS{'.challenge'}));
+    print "Using already hashed password.\n" unless $quiet ;
+  }
+  else
+  { # password is not already hashed
+    $PROPS{'passwd'} = md5_hex((md5_hex($password) . $PROPS{'.challenge'}));
+  }
+  return %PROPS;
+}
+
+sub Delete(@) {
+  my $cnt = $numurls;
+  my @lst = @_;
+  while ($cnt>=0) {
+    # print "url - $cnt " . $lst[$cnt] . "\n";
+    $request = GET $lst[$cnt] ;
+    $content = MyGet($request, 'delete messages', 1);
+    if ( $content =~ /<head><title>Yahoo\!\s*-\s*404 Not Found<\/title>/s)
+      {
+        $content = MyGet($request, 'delete messages', 1);
+        if ($content =~ /<head><title>Yahoo\!\s*-\s*404 Not Found<\/title>/s ){
+          MyDie("Failed: Couldn't delete messages\n");
+        }
+      }
+    $cnt = $cnt-1;
+  }
+  print $delCount . " message(s) have been deleted.\n" unless $quiet ;
+}
+
+sub MarkUnread(@) {
+  my $cnt = $numurls;
+  my @lst = @_;
+  while ($cnt>=0) {
+    $request = GET $lst[$cnt] ;
+    $content = MyGet($request, 'mark messages unread', 1);
+    if ( $content =~ /<head><title>Yahoo\!\s*-\s*404 Not Found<\/title>/s)
+      {
+        $content = MyGet($request, 'mark messages unread', 1);
+        if ($content =~ /<head><title>Yahoo\!\s*-\s*404 Not Found<\/title>/s ){
+          MyDie("Failed: Couldn't mark messages unread\n");
+        }
+      }
+    $cnt = $cnt-1;
+  }
+  print $unreadCount . " message(s) have been ". "left unread.\n" unless $quiet;
+}
+
+sub EmptyTrash($) {
+  my ($pagecontent) = @_;
+
+  if ( $pagecontent =~ /href=\"(\/ym\/(.*?)\?ET=1(.*?))\"/ ) {
+    $emptyurl = $baseurl . $1; }
+  elsif ( $pagecontent =~ /href=\"http:\/\/(.*?)(\/ym\/(.*?)\?ET=1(.*?))\"/ ) {
+    $emptyurl = $baseurl . $2; }
+  elsif ($pagecontent =~ /url \+= \"(=1\&\.crumb=(.*?))\"\;/) {
+    $emptyurl = $baseurl . '/ym/ShowFolder?ET'.$1;
+  }
+  else {
+    print "Warning: Couldn't get empty trash URL, not emptying trash\n"
+     unless ($quiet || $noerrors);
+    return;
+  }
+
+  $request = GET  $emptyurl ;
+  $content = MyGet($request, 'empty trash',0);
+  print "Trash emptied.\n" unless ($content eq "FAILED" || $quiet);
+}
+
+sub EmptyBulk($) {
+  my ($pagecontent) = @_;
+
+  if ($pagecontent =~ /href=\"(\/ym\/(.*?)\?EB=1(.*?))\"/) {
+    $emptyurl = $baseurl . $1; }
+  elsif ($pagecontent =~ /href=\"http:\/\/(.*?)(\/ym\/(.*?)\?EB=1(.*?))\"/) {
+    $emptyurl = $baseurl . $2; }
+  elsif ($pagecontent =~ /url \+= \"(=1\&\.crumb=(.*?))\"\;/) {
+    $emptyurl = $baseurl . '/ym/ShowFolder?EB'.$1;
+  }
+  else { 
+    print "Warning: Couldn't get empty bulk URL, not emptying Bulk folder\n"
+      unless ($quiet || $noerrors); 
+    return;
+  }
+
+  $request = GET  $emptyurl ;
+  $content = MyGet($request, 'empty bulk',0);
+  print "Bulk emptied.\n" unless ($content eq "FAILED" || $quiet);
+}
+
+sub Logout() {
+    $request = GET  $logouturl ;
+    $content = MyGet($request, 'logout',1);
+    print "Logged out.\n" unless $quiet;
+}
+
+
+sub ParseConfigFile() {
+
+  if ($altConfigFile) {
+    open(CONFIGFILE,$altConfigFile) || 
+      die "Can`t open config file $altConfigFile\n" ; 
+  }  else {
+    open(CONFIGFILE, $ENV{"HOME"} . "/.fetchyahoorc") ||
+      open(CONFIGFILE,"/etc/fetchyahoorc") || return;
+  }
+
+  while (<CONFIGFILE>) {
+    next if (/^\s*\#/);              # ignore lines with starting with a #
+
+    if (/^\s*username\s*=\s*(.*?)\s*$/i) {
+       $username = $1;
+    } elsif (/^\s*password\s*=\s*(.*?)\s*$/i) {
+       $password = $1;
+    } elsif (/^\s*use-https\s*=\s*(.*?)\s*$/i) {
+       $useHTTPS = $1;
+
+    } elsif (/^\s*use-spool\s*=\s*(.*?)\s*$/i) {
+       $useSpool = $1;
+    } elsif (/^\s*spool\s*=\s*(.*?)\s*$/i) {
+       $spoolName = $1;
+    } elsif (/^\s*spool-mode\s*=\s*(.*?)\s*$/i) {
+       $spoolMode = $1;
+
+    } elsif (/^\s*use-proxy\s*=\s*(.*?)\s*$/i) {
+       $useProxy = $1;
+    } elsif (/^\s*proxy-host\s*=\s*(.*?)\s*$/i) {
+       $proxyHost = $1;
+    } elsif (/^\s*proxy-port\s*=\s*(.*?)\s*$/i) {
+       $proxyPort = $1;
+    } elsif (/^\s*proxy-username\s*=\s*(.*?)\s*$/i) {
+       $proxyUser = $1;
+    } elsif (/^\s*proxy-password\s*=\s*(.*?)\s*$/i) {
+       $proxyPass = $1;
+
+    } elsif (/^\s*use-imap\s*=\s*(.*?)\s*$/i) {
+       $useIMAP = $1;
+    } elsif (/^\s*imap-host\s*=\s*(.*?)\s*$/i) {
+       $imapServer = $1;
+    } elsif (/^\s*imap-port\s*=\s*(.*?)\s*$/i) {
+       $imapPort = $1;
+    } elsif (/^\s*imap-username\s*=\s*(.*?)\s*$/i) {
+       $imapUser = $1;
+    } elsif (/^\s*imap-password\s*=\s*(.*?)\s*$/i) {
+       $imapPass = $1;
+    } elsif (/^\s*imap-mailbox\s*=\s*(.*?)\s*$/i) {
+       $imapMailbox = $1;
+
+    } elsif (/^\s*use-forward\s*=\s*(.*?)\s*$/i) {
+       $useForward = $1;
+    } elsif (/^\s*mail-host\s*=\s*(.*?)\s*$/i) {
+       $mailHost = $1;
+    } elsif (/^\s*send-to\s*=\s*(.*?)\s*$/i) {
+       @$sendToAddresses = split /\s*,\s*/, $1;
+    } elsif (/^\s*send-from\s*=\s*(.*?)\s*$/i) {
+       $sendFromAddress = $1;
+
+    } elsif (/^\s*max-messages\s*=\s*(.*?)\s*$/i) {
+       $maxMessages = $1;
+    } elsif (/^\s*new-messages-only\s*=\s*(.*?)\s*$/i) {
+       $newOnly = $1;
+    } elsif (/^\s*no-download\s*=\s*(.*?)\s*$/i) {
+       $noDownload = $1;
+    } elsif (/^\s*no-delete\s*=\s*(.*?)\s*$/i) {
+       $noDelete = $1;
+    } elsif (/^\s*use-https\s*=\s*(.*?)\s*$/i) {
+       $useHTTPS = $1;
+    } elsif (/^\s*quiet\s*=\s*(.*?)\s*$/i) {
+       $quiet = $1;
+    } elsif (/^\s*get-external\s*=\s*(.*?)\s*$/i) {
+       $getExternal = $1;
+
+    } elsif (/^\s*empty-bulk\s*=\s*(.*?)\s*$/i) {
+       $emptyBulk = $1;
+    } elsif (/^\s*empty-trash-after\s*=\s*(.*?)\s*$/i) {
+       $emptyTrashAfter = $1;
+    } elsif (/^\s*empty-trash-before\s*=\s*(.*?)\s*$/i) {
+       $emptyTrashBefore = $1;
+    } elsif (/^\s*logout\s*=\s*(.*?)\s*$/i) {
+       $logout = $1;
+    } elsif (/^\s*repeat-interval\s*=\s*(.*?)\s*$/i) {
+       $repeatInterval = $1;
+    } elsif (/^\s*no-errors\s*=\s*(.*?)\s*$/i) {
+       $noerrors = $1;
+
+    } elsif (/^\s*leave-unread\s*=\s*(.*?)\s*$/i) {
+       $leaveUnread = $1;
+    } elsif (/^\s*no-from-line\s*=\s*(.*?)\s*$/i) {
+       $noFromLine = $1;
+    } elsif (/^\s*status-only\s*=\s*(.*?)\s*$/i) {
+       $statusOnly = $1;
+    } elsif (/^\s*folder\s*=\s*(.*?)\s*$/i) {
+       $box = $1;
+    } elsif (/^\s*warning-level\s*=\s*(.*?)\s*$/i) {
+       $warningLevel = $1;
+    } elsif (/^\s*max-size\s*=\s*(.*?)\s*$/i) {
+       $maxSize = $1;
+    } elsif (/^\s*use-sendmail\s*=\s*(.*?)\s*$/i) {
+       $useSendmail = $1;
+    } elsif (/^\s*sendmail\s*=\s*(.*?)\s*$/i) {
+       $sendmail = $1;
+    }
+      elsif (/^\s*list-messages\s*=\s*(.*?)\s*$/i) {
+       $listMsgs = $1;
+    }
+      elsif (/^\s*use-msg-id-archive\s*=\s*(.*?)\s*$/i) {
+       $useMsgIDArchive = $1;
+    }
+      elsif (/^\s*msg-id-archive-file\s*=\s*(.*?)\s*$/i) {
+       $msgIDArchiveFile = $1;
+    }
+
+  }
+  close(CONFIGFILE);
+}
+
+sub Localize($) {
+  my ($cc) = @_;
+  if (not grep /$cc/,
+  ('us','fr','es','e1','de','it','br','ca','uk','cf','ar', 'cn', 'tw')) {
+    print "Country Code '$cc' not found. We will try the translation for 'us'.\n"
+      unless $quiet;
+    $cc='us';
+  }
+  my $strings;
+  my %localized_strings = 
+    ('us' => { 'msg_range' => 'showing (\d+)-(\d+) of (\d+)',
+               'new_msg_range' => 'Messages (\d+)-(\d+) of (\d+)',
+               'no_msgs'   => 'There\s*are\s*no\s*(unread)?\s*messages\s*in\s*your',
+     'new_no_msgs' => '[Ff]older[\sa-zA-Z]*has\s*no\s*(unread)?\s*messages',
+               'p_view'    => 'Printable\&nbsp;View' },
+     'fr' => { 'msg_range' => '(\d+)-(\d+) sur (\d+)',
+               'new_msg_range' => 'Messages (\d+)-(\d+) sur (\d+)',
+               'no_msgs'   =>
+               'Dossier\s*Bo褾e\s*de\s*r嶰eption\s*sans\s*messages',
+               'new_no_msgs'   =>
+               'Ce\s*dossier\s*ne\s*contient\s*pas\s*de\s*messages',
+               'new_no_msgs_2'   =>
+               'Il\s*n\'y\s*a\s*aucun\s*message\s*dans\s*\s*le\s*dossier',
+               'p_view'    => 'Version\&nbsp;imprimable' },
+     'cn' => { 'msg_range'     => '\x{663E}\x{793A}(\d+)-(\d+)\x{5171}\x{6709}(\d+)',
+               'new_msg_range'     => '\x{663E}\x{793A}(\d+)-(\d+)\x{5171}\x{6709}(\d+)',
+               'no_msgs'       => '\x{60A8}\x{7684}\x{6536}\x{4EF6}\x{7BB1}\x{4E2D}\x{6CA1}\x{6709}\x{4FE1}\x{606F}',
+               'new_no_msgs'   => '\x{60A8}\x{6709}\d+\x{5C01}\x{672A}\x{8BFB}\x{90AE}\x{4EF6}',
+               'p_view'        => '\x{6253}\x{5370}\x{753B}\x{9762}' },
+     'es' => { 'msg_range' => 'Mostrando (\d+)-(\d+) de (\d+)',
+               'new_msg_range' => 'Mensajes (\d+)-(\d+) de (\d+)',
+               'no_msgs'   => 
+               'La\s*carpeta\s*Bandeja\s*de\s*entrada\s*est塿s*vac燰',
+               'new_no_msgs' =>
+               'No\s*hay\s*ning�n\s*mensaje\s*sin\s*leer\s*en\s*la\s*carpeta',
+               'new_no_msgs_2'   =>
+               'No\s*hay\s*mensajes\s*en\s*la',
+               'p_view'    => 'Vista para imprimir' },
+     'e1' => { 'msg_range' => 'Mostrando (\d+)-(\d+) de (\d+)',
+               'new_msg_range' => 'Mensajes (\d+)-(\d+) de (\d+)',
+               'no_msgs'   => 'La\s*carpeta\s*Bandeja\s*de\s*entrada\s*est塿s*vac燰',
+               'new_no_msgs' =>'Esta\s*carpeta\s*no\s*tiene\s*mensajes\s*mensajes\s*no\s*le獮os',
+               'new_no_msgs_2' =>'No\s*hay\s*mensajes\s*en\s*tu\s*carpeta',
+               'p_view'    => 'Vista para imprimir' },
+     'de' => { 'msg_range' => 'Nachrichten (\d+)-(\d+) von (\d+)',
+               'new_msg_range' => 'Mails (\d+)-(\d+) von (\d+)',
+               'no_msgs'   => 'Dieser\s*Ordner\s*hat\s*keine\s*E-Mails',
+               'new_no_msgs'   => 'Dieser\s*Ordner\s*hat\s*keine\s*E-Mails',
+               'new_no_msgs_2'   =>
+               'Sie\s*haben?\s*keine.*?Mails\s*in\s*Ihrem',
+               'p_view'    => 'Druckform' },
+    'it' => { 'msg_range' => 'mostra (\d+)-(\d+) di (\d+)',
+               'no_msgs'   => 'La\s*cartella\s*In\s*arrivo\s*non\s*contiene\s*messaggi',
+              'new_msg_range' => 'Messaggi (\d+)-(\d+) di (\d+)',
+              'new_no_msgs'   => 'Non ci sono messaggi non letti nella cartella',
+               'p_view'    => 'Anteprima&nbsp;di&nbsp;stampa' },
+     'br' => { 'msg_range' => 'exibindo (\d+)-(\d+) de (\d+)',
+               'new_msg_range' => 'Mensagens (\d+)-(\d+) de (\d+)',
+               'no_msgs'   => 'A\s*pasta\s*Caixa\s*de\s*entrada\s*n緌',
+               'new_no_msgs'  => 'Esta\s*pasta\s*n緌\s*tem\s*mensagens',
+               'new_no_msgs_2'   =>
+               'N緌\s*h塿s*mensagens\s*em\s*sua\s*pasta',
+               'p_view'    => 'Visualizar&nbsp;impress緌' },
+     'ar' => { 'msg_range' => 'Mostrando (\d+)-(\d+) de (\d+)',
+               'new_msg_range' => 'Mensajes (\d+)-(\d+) de (\d+)',
+              'no_msgs'   => 'No\s*hay\s*mensajes\s*en\s*tu\s*carpeta',
+   'new_no_msgs' =>'No\s*hay\s*mensajes\s*sin\s*leer\s*en\s*tu\s*Bandeja\s*de\s*entrada',
+               'p_view'    => 'Presentaci鏮 para imprimir' },
+    'tw' => { 'msg_range' => '自 (\d+)-(\d+) 封信件 在 (\d+)',
+              'new_msg_range' => '自 (\d+)-(\d+) 封信件 一共有 (\d+) 封信',
+              'no_msgs'   => '在\S+內\.',
+              'new_no_msgs' => '在\S+內\.',
+              'p_view'    => '友善列印' }
+       );
+
+  $cc = 'us' if $cc eq 'uk';
+  $cc = 'us' if $cc eq 'ca';
+  $cc = 'fr' if $cc eq 'cf';
+
+  if ($strings = $localized_strings{$cc}) { return %$strings; } 
+  else { return 0; }
+
+}
+
+sub checkExternal() {
+  my @content;
+  my @extboxen;
+  my $tmpurl;
+  print "Checking external boxen..\n" unless $quiet;
+  $request = GET $baseurl . "/ym/External";
+  $content = MyGet ($request, 'get external mailboxes listing', 0);
+  #$content =~ s/Exhref=\"(.*)\"/$1/g;
+  @content = split(/\n/, $content);
+  @extboxen = grep s/.*href=\"(.*?External\?GET[^"]*)\".*/$1/g,@content;  #" heh
+
+  # just loading the URL for an external mailbox loads the messages from it
+  foreach $tmpurl (@extboxen) {
+    $_ = $tmpurl;
+    s/.*Srvr=(.*?)\&.*/$1/;
+    print $_ . "\n" unless $quiet ;
+    $request = GET $baseurl . $tmpurl;
+    $content = MyGet ($request, 'get external mailbox messages', 0);
+  }
+}
+
+sub DeliverSendmailMessage
+{
+    my($destaddr, $email) = @_;
+
+    my($OUT) = new FileHandle "| $sendmail $destaddr";
+
+    if (! defined ($OUT)) {
+       MyDie("Failed: Unable to open sendmail");
+     }
+
+    # Dump the message to sendmail.
+    print $OUT $email;
+
+    $OUT->close();
+}
+
+sub DeliverMessage {
+  my ( $messageRef, $fromLine, $mimeHead ) = @_;
+  if ($useSpool) {
+    if ($spoolName !~ /\/$/) {
+      # send From_line and message to the specified spool/file
+      open SPOOL, "$spool" or
+        MyDie("Failed: Couldn't open output: $spool");
+
+      flock SPOOL, 2 unless ($spoolMode eq 'pipe');  # lock the mailbox file
+
+      if (!$noFromLine) {
+        print SPOOL $fromLine or 
+          MyDie("Failed: Couldn't write to output: $spool");
+      }
+      print SPOOL $$messageRef or 
+        MyDie("Failed: Couldn't write to output: $spool");
+
+      flock SPOOL, 8 unless ($spoolMode eq 'pipe'); # unlock the mailbox file
+      close SPOOL;
+    }
+    else { # this is a maildir directory to write to
+      # the below is better but adds a dependency on Socket
+      # my ($maildirHostname) = gethostbyname(hostname);
+      my ($maildirHostname) = $localHostname ;
+      # clean up invalid hostnames
+      $maildirHostname =~ s/\//\\057/g;
+      $maildirHostname =~ s/:/\\072/g;
+
+      # build the unique filename
+      my $maildirMessageName =  time() . ".P" . $$ . "Q" .
+        $maildirDeliveryCount++ . "." . $maildirHostname;
+      my $maildirTmpFilename = $spoolName . "tmp/" . $maildirMessageName;
+      my $maildirNewFilename = $spoolName . "new/" . $maildirMessageName;
+
+      # copy the message to tmp
+      # ignores $spoolMode since $maildirMessageName is supposed to be unique
+      open SPOOL, ">$maildirTmpFilename" or
+        MyDie("Failed: Couldn't open output: $maildirTmpFilename");
+      if (!$noFromLine) {
+        print SPOOL $fromLine or 
+        MyDie("Failed: Couldn't write to output: $maildirTmpFilename");
+      }
+      print SPOOL "$$messageRef" or 
+        MyDie("Failed: Couldn't write to output: $maildirTmpFilename");
+
+      close SPOOL;
+      # move the message to new
+      unless (rename($maildirTmpFilename, $maildirNewFilename)) {
+              MyDie("Failed: Couldn't rename: $maildirNewFilename");
+      }
+    }
+  }
+  # if overwrite mode is chosen, we only need to overwrite the first time
+  if (!$overwriteFlag and $spoolMode eq "overwrite") {
+    $overwriteFlag = 1;
+    $spool = '>>' . $spoolName
+  }
+
+  # mail fowarding stuff goes here
+  if ($useForward && !$useSendmail) {
+    # initiate smtp connection once if we are forwarding mail
+    $smtp = Net::SMTP->new($mailHost);
+    if (!$smtp) {
+      MyDie("Failed: Unable to connect to server $mailHost to forward ".
+            "mail. \n");
+    }
+    my $fromEmailAddress = $mimeHead->get('From');
+    $smtp->mail(GetEmailAddress(chomp($fromEmailAddress)) || $sendFromAddress);
+    $smtp->to( @$sendToAddresses );
+    $smtp->data();
+    $smtp->datasend($$messageRef);
+    $smtp->dataend();
+    $smtp->quit();
+  }
+
+  if ($useForward && $useSendmail) {
+      my $email;
+      foreach $email (@$sendToAddresses) {
+         DeliverSendmailMessage($email, $$messageRef);
+      }
+  }
+
+  if ($useIMAP){
+
+       # Need to use IO::Socket::SSL and pass socket to Mail::IMAPClient
+
+       print "Using IMAP\n";
+
+       if (!defined $imap) {
+               print "Connecting to imap server $imapServer\n";
+               # returns a new, authenticated Mail::IMAPClient object
+               $imap = Mail::IMAPClient->new( 
+                                        Server   => $imapServer,
+                                        User     => $imapUser,
+                                        Port     => $imapPort,
+                                        Password => $imapPass,
+                                        Peek     => 1,
+                                       ) or die "Cannot connect: $@";
+       } else {
+               print "Using existing IMAP connection\n";
+       }
+
+       $imap->select($imapMailbox);
+
+       my $msg = $fromLine . $$messageRef;
+
+       # X-FetchYahoo: version 2.8.0 MsgId 7768_38951_10786_1209_3560_0_83_11889_2047182648
+       #my $fyid = $mimeHead->get('X-FetchYahoo');
+       # could then do loop with $imap->parse_headers to look for this so we don't do duplicates
+
+       my $uid = $imap->append($imapMailbox,$msg) or die "Could not append: $@\n";
+  } 
+
+}
+
+##### begin excerpt from Digest-Perl-MD5-1.6 MD5.pm ######
+
+# I-Vektor
+sub A() { 0x67_45_23_01 }
+sub B() { 0xef_cd_ab_89 }
+sub C() { 0x98_ba_dc_fe }
+sub D() { 0x10_32_54_76 }
+
+# for internal use
+sub MAX() { 0xFFFFFFFF }
+
+# padd a message to a multiple of 64
+sub padding {
+    my $l = length (my $msg = shift() . chr(128));    
+    $msg .= "\0" x (($l%64<=56?56:120)-$l%64);
+    $l = ($l-1)*8;
+    $msg .= pack 'VV', $l & MAX , ($l >> 16 >> 16);
+}
+
+
+sub rotate_left($$) {
+	#$_[0] << $_[1] | $_[0] >> (32 - $_[1]);
+	#my $right = $_[0] >> (32 - $_[1]);
+	#my $rmask = (1 << $_[1]) - 1;
+	($_[0] << $_[1]) | (( $_[0] >> (32 - $_[1])  )  & ((1 << $_[1]) - 1));
+	#$_[0] << $_[1] | (($_[0]>> (32 - $_[1])) & (1 << (32 - $_[1])) - 1);
+}
+
+sub gen_code {
+  # Discard upper 32 bits on 64 bit archs.
+  my $MSK = ((1 << 16) << 16) ? ' & ' . MAX : '';
+#	FF => "X0=rotate_left(((X1&X2)|(~X1&X3))+X0+X4+X6$MSK,X5)+X1$MSK;",
+#	GG => "X0=rotate_left(((X1&X3)|(X2&(~X3)))+X0+X4+X6$MSK,X5)+X1$MSK;",
+  my %f = (
+	FF => "X0=rotate_left((X3^(X1&(X2^X3)))+X0+X4+X6$MSK,X5)+X1$MSK;",
+	GG => "X0=rotate_left((X2^(X3&(X1^X2)))+X0+X4+X6$MSK,X5)+X1$MSK;",
+	HH => "X0=rotate_left((X1^X2^X3)+X0+X4+X6$MSK,X5)+X1$MSK;",
+	II => "X0=rotate_left((X2^(X1|(~X3)))+X0+X4+X6$MSK,X5)+X1$MSK;",
+  );
+  #unless ( (1 << 16) << 16) { %f = %{$CODES{'32bit'}} }
+  #else { %f = %{$CODES{'64bit'}} }
+
+  my %s = (  # shift lengths
+	S11 => 7, S12 => 12, S13 => 17, S14 => 22, S21 => 5, S22 => 9, S23 => 14,
+	S24 => 20, S31 => 4, S32 => 11, S33 => 16, S34 => 23, S41 => 6, S42 => 10,
+	S43 => 15, S44 => 21
+  );
+
+  my $insert = "";
+  while(<DATA>) {
+	chomp;
+	next unless /^[FGHI]/;
+	my ($func,@x) = split /,/;
+	my $c = $f{$func};
+	$c =~ s/X(\d)/$x[$1]/g;
+	$c =~ s/(S\d{2})/$s{$1}/;
+        $c =~ s/^(.*)=rotate_left\((.*),(.*)\)\+(.*)$//;
+
+	#my $rotate = "(($2 << $3) || (($2 >> (32 - $3)) & (1 << $2) - 1)))"; 
+	$c = "\$r = $2;
+        $1 = ((\$r << $3) | ((\$r >> (32 - $3))  & ((1 << $3) - 1))) + $4";
+	$insert .= "\t$c\n";
+  }
+  close DATA;
+  
+  my $dump = '
+  sub round {
+	my ($a,$b,$c,$d) = @_[0 .. 3];
+	my $r;
+
+	' . $insert . '
+	$_[0]+$a' . $MSK . ', $_[1]+$b ' . $MSK . 
+        ', $_[2]+$c' . $MSK . ', $_[3]+$d' . $MSK . ';
+  }';
+  eval $dump;
+  # print "$dump\n";
+  # exit 0;
+}
+
+#########################################
+# Private output converter functions:
+sub _encode_hex { unpack 'H*', $_[0] }
+
+sub md5 {
+	my $message = padding(join'',@_);
+	my ($a,$b,$c,$d) = (A,B,C,D);
+	my $i;
+	for $i (0 .. (length $message)/64-1) {
+		my @X = unpack 'V16', substr $message,$i*64,64;	
+		($a,$b,$c,$d) = round($a,$b,$c,$d,@X);
+	}
+	pack 'V4',$a,$b,$c,$d;
+}
+sub md5_hex { _encode_hex &md5 }
+
+##### end excerpt from Digest-Perl-MD5-1.6 MD5.pm ######
+
+__DATA__
+FF,$a,$b,$c,$d,$_[4],7,0xd76aa478,/* 1 */
+FF,$d,$a,$b,$c,$_[5],12,0xe8c7b756,/* 2 */
+FF,$c,$d,$a,$b,$_[6],17,0x242070db,/* 3 */
+FF,$b,$c,$d,$a,$_[7],22,0xc1bdceee,/* 4 */
+FF,$a,$b,$c,$d,$_[8],7,0xf57c0faf,/* 5 */
+FF,$d,$a,$b,$c,$_[9],12,0x4787c62a,/* 6 */
+FF,$c,$d,$a,$b,$_[10],17,0xa8304613,/* 7 */
+FF,$b,$c,$d,$a,$_[11],22,0xfd469501,/* 8 */
+FF,$a,$b,$c,$d,$_[12],7,0x698098d8,/* 9 */
+FF,$d,$a,$b,$c,$_[13],12,0x8b44f7af,/* 10 */
+FF,$c,$d,$a,$b,$_[14],17,0xffff5bb1,/* 11 */
+FF,$b,$c,$d,$a,$_[15],22,0x895cd7be,/* 12 */
+FF,$a,$b,$c,$d,$_[16],7,0x6b901122,/* 13 */
+FF,$d,$a,$b,$c,$_[17],12,0xfd987193,/* 14 */
+FF,$c,$d,$a,$b,$_[18],17,0xa679438e,/* 15 */
+FF,$b,$c,$d,$a,$_[19],22,0x49b40821,/* 16 */ 
+GG,$a,$b,$c,$d,$_[5],5,0xf61e2562,/* 17 */
+GG,$d,$a,$b,$c,$_[10],9,0xc040b340,/* 18 */
+GG,$c,$d,$a,$b,$_[15],14,0x265e5a51,/* 19 */
+GG,$b,$c,$d,$a,$_[4],20,0xe9b6c7aa,/* 20 */
+GG,$a,$b,$c,$d,$_[9],5,0xd62f105d,/* 21 */
+GG,$d,$a,$b,$c,$_[14],9,0x2441453,/* 22 */
+GG,$c,$d,$a,$b,$_[19],14,0xd8a1e681,/* 23 */
+GG,$b,$c,$d,$a,$_[8],20,0xe7d3fbc8,/* 24 */
+GG,$a,$b,$c,$d,$_[13],5,0x21e1cde6,/* 25 */
+GG,$d,$a,$b,$c,$_[18],9,0xc33707d6,/* 26 */
+GG,$c,$d,$a,$b,$_[7],14,0xf4d50d87,/* 27 */
+GG,$b,$c,$d,$a,$_[12],20,0x455a14ed,/* 28 */
+GG,$a,$b,$c,$d,$_[17],5,0xa9e3e905,/* 29 */
+GG,$d,$a,$b,$c,$_[6],9,0xfcefa3f8,/* 30 */
+GG,$c,$d,$a,$b,$_[11],14,0x676f02d9,/* 31 */
+GG,$b,$c,$d,$a,$_[16],20,0x8d2a4c8a,/* 32 */
+HH,$a,$b,$c,$d,$_[9],4,0xfffa3942,/* 33 */
+HH,$d,$a,$b,$c,$_[12],11,0x8771f681,/* 34 */
+HH,$c,$d,$a,$b,$_[15],16,0x6d9d6122,/* 35 */
+HH,$b,$c,$d,$a,$_[18],23,0xfde5380c,/* 36 */
+HH,$a,$b,$c,$d,$_[5],4,0xa4beea44,/* 37 */
+HH,$d,$a,$b,$c,$_[8],11,0x4bdecfa9,/* 38 */
+HH,$c,$d,$a,$b,$_[11],16,0xf6bb4b60,/* 39 */
+HH,$b,$c,$d,$a,$_[14],23,0xbebfbc70,/* 40 */
+HH,$a,$b,$c,$d,$_[17],4,0x289b7ec6,/* 41 */
+HH,$d,$a,$b,$c,$_[4],11,0xeaa127fa,/* 42 */
+HH,$c,$d,$a,$b,$_[7],16,0xd4ef3085,/* 43 */
+HH,$b,$c,$d,$a,$_[10],23,0x4881d05,/* 44 */
+HH,$a,$b,$c,$d,$_[13],4,0xd9d4d039,/* 45 */
+HH,$d,$a,$b,$c,$_[16],11,0xe6db99e5,/* 46 */
+HH,$c,$d,$a,$b,$_[19],16,0x1fa27cf8,/* 47 */
+HH,$b,$c,$d,$a,$_[6],23,0xc4ac5665,/* 48 */
+II,$a,$b,$c,$d,$_[4],6,0xf4292244,/* 49 */
+II,$d,$a,$b,$c,$_[11],10,0x432aff97,/* 50 */
+II,$c,$d,$a,$b,$_[18],15,0xab9423a7,/* 51 */
+II,$b,$c,$d,$a,$_[9],21,0xfc93a039,/* 52 */
+II,$a,$b,$c,$d,$_[16],6,0x655b59c3,/* 53 */
+II,$d,$a,$b,$c,$_[7],10,0x8f0ccc92,/* 54 */
+II,$c,$d,$a,$b,$_[14],15,0xffeff47d,/* 55 */
+II,$b,$c,$d,$a,$_[5],21,0x85845dd1,/* 56 */
+II,$a,$b,$c,$d,$_[12],6,0x6fa87e4f,/* 57 */
+II,$d,$a,$b,$c,$_[19],10,0xfe2ce6e0,/* 58 */
+II,$c,$d,$a,$b,$_[10],15,0xa3014314,/* 59 */
+II,$b,$c,$d,$a,$_[17],21,0x4e0811a1,/* 60 */
+II,$a,$b,$c,$d,$_[8],6,0xf7537e82,/* 61 */
+II,$d,$a,$b,$c,$_[15],10,0xbd3af235,/* 62 */
+II,$c,$d,$a,$b,$_[6],15,0x2ad7d2bb,/* 63 */
+II,$b,$c,$d,$a,$_[13],21,0xeb86d391,/* 64 */

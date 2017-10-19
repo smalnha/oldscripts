@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# http://www.linux.com/articles/53702
+# http://tovid.wikia.com/wiki/Main_Page
+# http://www.dvdstyler.de/
+# http://forums.gentoo.org/viewtopic.php?t=117709
+# http://qdvdauthor.sourceforge.net/
+
+_swf2mpg(){
+	mplayer -vo dummy -ao dummy -identify $1
+	mencoder -oac lavc -ovc lavc -of mpeg -mpegopts format=dvd -vf scale=720:480,harddup -srate 48000 -af lavcresample=48000 -lavcopts vcodec=mpeg2video:vrc_buf_size=1835:vrc_maxrate=9800:vbitrate=5000:keyint=18:aspect=4/3:acodec=ac3:abitrate=192 -ofps 30000/1001 -o "$1".mpg "$1"
+}
+
+flv2divx(){
+	if [ -z "$1" ]; then
+	  echo "Usage: $0 {-divx|-xvid} list_of_flv_files"
+	  exit 1
+	fi
+
+	# video encoding bit rate
+	V_BITRATE=1000
+
+	while [ "$1" ]; do
+	  case "$1" in
+		 -divx)
+			MENC_OPTS="-ovc lavc -lavcopts vcodec=mpeg4:vbitrate=$V_BITRATE:mbd=2:v4mv:autoaspect"
+			;;
+		 -xvid)
+			MENC_OPTS="-ovc xvid -xvidencopts bitrate=$V_BITRATE:autoaspect"
+			;;
+		 -o) shift
+			OUTDIR="$1"
+			shift
+			;;
+		 *)
+			if file "$1" | grep -q "Macromedia Flash Video"; then
+			  echo mencoder "$1" $MENC_OPTS -vf pp=lb -oac mp3lame -lameopts fast:preset=standard -o "$OUTDIR/$1.avi"
+			  mencoder "$1" $MENC_OPTS -vf pp=lb -oac mp3lame -lameopts fast:preset=standard -o "$OUTDIR/$1.avi"
+			else
+			  echo "$1 is not Flash Video. Skipping"
+			fi
+			;;
+	  esac
+	  shift
+	done
+}
+
+ffmpeg{
+	for FLASH in bjork-PossiblyMaybe.swf; do ffmpeg -i bjork-PossiblyMaybe.swf -b 1000k -r 29  ~/NOBACKUP/staging/bjork-PossiblyMaybe.swf.mpg && mv bjork-PossiblyMaybe.swf cd-done; done
+}

@@ -1,0 +1,14 @@
+; generated_rule Eclipse
+( if 
+( begin 
+( is ( window_role ) "normal" )
+( is ( window_class ) "eclipse" )
+( is ( application_name ) "eclipse" )
+( is ( window_workspace ) "0" )
+) 
+( begin 
+( maximize )
+( set_workspace 2 )
+( println "moved Eclipse to workspace 2" )
+)
+)

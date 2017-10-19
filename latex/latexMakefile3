@@ -1,0 +1,212 @@
+# --------------------------------------------------------------------------- #
+# Dave Richerby's wonderful LaTeX makefile                                    #
+# --------------------------------------------------------------------------- #
+
+# Changed by Wenguang Wang (wang@cs.usask.ca)
+
+# This makefile is in the public domain.  Do whatever you want with it
+# but be aware that it is provided ``as is'' without any express or
+# implied warranty.
+#
+# Please mail comments or suggestions to davidr@chiark.greenend.org.uk
+#
+# Examples of usage:
+#   ``make '':          compile foo.tex to pdf
+#   ``make foo.ps'':    compile foo.tex to PostScript
+#
+# Warning: don't cut and paste this file from your browser as it will
+# probably convert all the tabs to spaces.  The make program needs
+# them to be tabs.
+#
+# Changes:
+#
+# 2003-03-19: The following changes are made by Wenguang Wang (wang@cs.usask.ca)
+#   1. Support multiple tex files
+#   2. Add bibtex
+#   3. Use epstopdf to convert eps to pdf
+#   4. Use pdflatex to generate pdf files
+#   5. Remove gzip, view ps, eepic, tiff support
+#   6. Change rules for clean and veryclean to make them safer
+#
+# 2000-10-18: Added PDF output (thanks to chrisw@chiark.greenend.org.uk)
+# 2000-10-12: Original version
+
+# The following variables should be changed acordding to your TeX
+# files
+
+# this is the output file name, which must be the same as your master
+# latex file
+TARGET=my_diss_draft
+
+#BIBSRC=bib/.bib
+
+TEXSRC = \
+	abstract.tex \
+	acronym.tex \
+	background.tex \
+	bufferpool.tex \
+	buffman.tex \
+	conclusion.tex \
+	defense-proposal.tex \
+	experiment.tex \
+	fig.tex \
+	hylog.tex \
+	intro.tex \
+	locality.tex \
+	logical.tex \
+	opt_disk.tex \
+	physical.tex \
+	proposal.tex \
+	relatedwork.tex \
+	self-tuning.tex \
+	simulator.tex \
+	smart_use_bp.tex \
+	thesis.tex \
+
+EPSIMGS = \
+	allarch.eps \
+	allperf380M_fill.eps \
+	allperf440M_fill.eps \
+	analysis.eps \
+	c1_inter_obj8objtype_cdf.eps \
+	c1_l_obj8objtype.eps \
+	c1_stack_obj8objtype_cdf.eps \
+	c60_inter_all_cdf.eps \
+	c60_inter_modflag_cdf.eps \
+	c60_inter_obj12_cdf.eps \
+	c60_inter_obj89_cdf.eps \
+	c60_inter_objtype_cdf.eps \
+	c60_l_all.eps \
+	c60_l_obj12.eps \
+	c60_l_obj89.eps \
+	c60_l_objtype.eps \
+	c60_stack_all_cdf.eps \
+	c60_stack_data_cdf.eps \
+	c60_stack_index_cdf.eps \
+	c60_stack_modflag_cdf.eps \
+	c60_stack_obj12_cdf.eps \
+	c60_stack_obj89_cdf.eps \
+	c60_stack_obj8_cdf.eps \
+	c60_stack_objtype_cdf.eps \
+	call123460_l_obj9.eps \
+	cdf.eps \
+	cnameskew.eps \
+	db2trc.eps \
+	dyn_delta_l.eps \
+	dyn_int_l.eps \
+	dyn_int_small_l.eps \
+	dyn_io_l.eps \
+	dyn_n_l.eps \
+	dyn_syncw_l.eps \
+	dyn_tpm_l.eps \
+	e-commerce.eps \
+	hylog-layout.eps \
+	hylog.eps \
+	ifile.eps \
+	inode.eps \
+	inter_all_cdf.eps \
+	inter_modflag_cdf.eps \
+	inter_obj_bad_cdf.eps \
+	inter_obj_good_cdf.eps \
+	inter_obj_mid_cdf.eps \
+	inter_objtype_cdf.eps \
+	iocost_pc_l.eps \
+	l_all.eps \
+	l_obj_bad.eps \
+	l_obj_good.eps \
+	l_obj_mid.eps \
+	l_objtype.eps \
+	missratio.eps \
+	n_ioactivitypc2_l.eps \
+	n_ioactivitypc44_l.eps \
+	n_sim_db2_tpm_pc_l.eps \
+	n_sim_pc2_pc44_l.eps \
+	new-sto-arch.eps \
+	oltp.eps \
+	page_cleaners.eps \
+	pagedistribution.eps \
+	par_page_per.eps \
+	par_page_per_short.eps \
+	parperf.eps \
+	perf.eps \
+	perfnorm.eps \
+	seguse.eps \
+	seq_obj_cdf.eps \
+	sim_db2_tpm.eps \
+	sim_db2_tpm_large_l.eps \
+	stack_all_cdf.eps \
+	stack_modflag_cdf.eps \
+	stack_obj_bad_cdf.eps \
+	stack_obj_good_cdf.eps \
+	stack_obj_mid_cdf.eps \
+	stack_objtype_cdf.eps \
+	sto-arch.eps \
+	storsim-arch.eps \
+	table.eps \
+	tpcc-env.eps \
+	tpccskew.eps \
+	trcpoint.eps \
+	update_freq.eps \
+	wmissratio.eps \
+	wrap-interval.eps \
+
+# --------------------------------------------------------------------------- #
+# You shouldn't need to change anything below this point unless you're        #
+# extending the functionality of the makefile.                                #
+# --------------------------------------------------------------------------- #
+
+PDFTARGET=$(TARGET).pdf
+
+default: $(PDFTARGET)
+
+PDFIMGS = $(EPSIMGS:.eps=.pdf)
+
+clean:
+	rm -f $(TARGET).log $(TEXSRC:.tex=.aux)
+	rm -f $(TARGET).lof $(TARGET).lot $(TARGET).toc
+	rm -f $(TARGET).bbl $(TARGET).blg $(TARGET).out
+
+veryclean:
+	rm -f $(TARGET).dvi $(TARGET).ps $(TARGET).pdf $(PDFIMGS)
+
+$(TARGET).dvi: $(TEXSRC)
+	@echo
+	@echo \*
+	@echo \* Compiling $(TARGET)
+	@echo \*
+	$(MAKE) $(TARGET).bbl
+	latex $(TARGET)
+	@while ( grep "Rerun to get cross-references" $(TARGET).log >/dev/null ); do \
+		echo '** Re-running LaTeX **'; \
+		latex $(TARGET); \
+	done
+
+$(TARGET).ps: $(TARGET).dvi 
+	@echo
+	@echo \*
+	@echo \* Converting $< to PostScript
+	@echo \*
+	dvips -t letterSize -o $@ $<
+
+# use pdfLaTex to generate pdf, since
+# the pdf will contain bookmarks and hyperlinks.
+$(TARGET).pdf: $(TEXSRC) $(PDFIMGS)
+	@echo
+	@echo \*
+	@echo \* Running pdfLaTeX $(TARGET)
+	@echo \*
+	$(MAKE) -k $(TARGET).bbl
+	pdflatex $(TARGET).tex
+	@while ( grep "Rerun to get cross-references" $(TARGET).log >/dev/null ); do \
+		echo '** Re-running pdfLaTeX **'; \
+		pdflatex $(TARGET).tex; \
+	done
+
+# convert eps files to pdf for pdfLaTeX
+%.pdf: %.eps
+	egrep -v "^%%Orientation:" $< | epstopdf --filter --outfile=$@
+
+# run bibtex
+$(TARGET).bbl: $(TEXSRC) $(BIBSRC)
+	latex $(TARGET).tex
+	bibtex $(TARGET)

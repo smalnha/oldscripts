@@ -1,0 +1,9 @@
+#machinename:shared_dirname:mount_point(alias):options(comma-separated)
+mygateway:Shared:silverGW:password=""
+silver:Shared:silverWired:password=""
+silverWireless:Shared:silverWL:password=""
+andy:Ba:ba:password=""
+andy:Hai:hai:password=""
+andy:Deux:deux:password=""
+xp-black:storage:xp-black:password=""
+

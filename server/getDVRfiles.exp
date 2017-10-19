@@ -1,0 +1,34 @@
+#!/usr/bin/expect --
+
+set timeout -1
+
+stty -echo
+send_user "dvrcamera's root password: "
+#expect_user -re "(.*)\n"
+#set password $expect_out(1,string)
+set password "myH0use"
+stty echo
+
+spawn telnet dvrcameras
+
+expect "login:"
+
+send "root\n"
+
+expect "assword:"
+send "$password\n"
+
+expect "~ $ "
+send "cd /stm/disk/0/p1 \n"
+expect " $ "
+send "mkdir toDownload \n"
+expect " $ "
+#send "\[ -d snapshots \] && mv snaps-*.gz snapshots toDownload && mkdir snapshots \n"
+send "mv snaps-*.gz toDownload\n"
+expect " $ "
+send "ls toDownload | wc \n"
+expect " $ "
+send "if \[ -d toDownload \]; then tar -czf - toDownload | nc $env(myIP) 8081 && rm -rf toDownload; else ls -altr > dir.lst; tar -czf - dir.lst | nc $env(myIP) 8081; rm dir.lst; fi \n"
+expect " $ "
+send "exit\n"
+

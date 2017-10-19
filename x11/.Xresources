@@ -1,0 +1,141 @@
+
+! Xcursor.theme: redglass
+
+! seconds to update
+!Xload.update: 1
+
+! lowest priority, this is probably overridden by .xscreensaver
+Xscreensaver.nice: 19
+Xscreensaver.lock: True
+
+!xmessage.nearMouse: True
+xmessage.defaultButton: okay
+
+xcb.layout: v
+xcb.bufferCount: 4
+xcb*background: #222222
+xcb*foreground: #777777
+xcb*font: 6x13
+
+Xautolock.time: 8
+Xautolock.locker: lock.sh
+Xautolock.corners: 0+0+
+Xautolock.cornerdelay: 5
+Xautolock.cornersize: 5
+
+
+! emacs*Background: black
+! emacs*Foreground: grey90
+
+! for openoffice menu font size: replace "Andale Sans UI" with BitStream
+
+! changes all fonts
+Xft.dpi: 84
+Xft.hinting: 1
+Xft.hintstyle: hintmedium
+! Xft.antialias: 
+
+tablaunch.font: *-helvetica-medium-r-normal--12-*
+tablaunch.selected_font: *-helvetica-bold-r-normal--14-*
+!tablaunch.rightalign: false
+tablaunch.xoffset: 100
+tablaunch.hidden_height: 3
+! tablaunch.propertyfile: .tablaunch
+! tablaunch.global_workspace_scrolling: true
+
+! nailer.hidden_height: 3
+nailer.hide_delay: 1000000
+! doesnt work:
+nailer.dock_position: bottom
+
+! VNC : keys dont work in fullscreen mode
+!*desktop.translations: #override\n\
+!    <Key>F12: ToggleFullScreen()
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! common for xterm and Aterm and mrxvt
+XTerm*foreground: gray
+XTerm*background: black
+Xterm.background: black
+xterm.background: black
+XTerm.cursorColor: gray
+xterm*geometry: 130x50
+XTerm.saveLines: 1000
+XTerm.visualBell: false
+XTerm.scrollBar: false
+
+! good for hi-res LCDs or laptops
+XTerm.font: 6x13
+
+! for unikey vietnames input
+!XTerm*allowSendEvents: 1
+!xterm*allowSendEvents: 1
+
+! specifically for xterm
+!xterm*rightScrollBar: true
+xterm.reversewrap: true
+xterm.jumpScroll: true
+
+!xterm*font: 9x15bold
+
+! so that Home and End work in pine, but causes problems at xterm prompt
+! it seems to work in xterm now.?
+!*VT100.Translations: #override <Key>Home: string("\033[1~")\n\
+!                               <Key>End: string("\033[4~")
+
+
+! needed for dircolors and adding $MY_BIN to $PATH
+! XTerm.loginShell: true
+! xterm.loginShell: true
+
+!!------------------------------------------------------------------
+
+! Aterm.loginShell: true
+
+! specifically for Aterm
+! for compatibility if needed: Aterm*termName: xterm
+! has no effect: Aterm*pointerColor: green
+Aterm.transparent: true
+Aterm.scrollBar: false
+Aterm.transpscrollbar: true
+Aterm.shading: 30
+! Aterm.tinting: #AAAAAA
+Aterm.troughColor: magenta
+!not all the time: Aterm.menu: ~/.aterm_menu
+! unfocused fading
+Aterm.fading: 70
+
+Aterm.bigfont_key: KP_Add
+Aterm.smallfont_key: KP_Subtract
+
+! false -> scroll to bottom on tty output
+Aterm.scrollTtyOutput: true
+! scroll to bottom on keypress
+Aterm.scrollKeypress: true
+Aterm.scrollKey: true
+
+Aterm.termName: xterm
+
+! use: xterm -name email -e mutt
+! send scroll as UP and DOWN arrow keys
+! enables mouse scrolling in mutt
+! order matters: Ctrl <key> must appear before <key>
+email.vt100.translations:   #override\n\
+         <Btn4Down>: string("\033OA")\n\
+         <Btn5Down>: string("\033OB")\n\
+         Ctrl <Btn4Down>: string("\033OA") string("\033OA") string("\033OA")\n\
+         Ctrl <Btn5Down>: string("\033OB") string("\033OB") string("\033OB")\n\
+         Ctrl <Btn1Down>: string("\033OC")\n\
+         Ctrl <Btn3Down>: string("\033OD")\n\
+
+!Aterm*VT100.Translations:		#override \n\
+!		s<Btn4Down>: string("0x9b") string("[64~") \n\
+!		s<Btn5Down>: string("0x9b") string("[65~") \n\
+!		<Btn4Down>: string("4") \n\
+!		<Btn5Down>: string("5") \n\
+!		<Btn4Up>: \n\
+!		<Btn5Up>:
+
+

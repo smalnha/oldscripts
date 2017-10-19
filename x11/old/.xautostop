@@ -1,0 +1,22 @@
+# called by .xinitrc
+
+#pgrep -u $USER ivman && kill `pgrep -u $USER ivman`
+pkill ivman
+
+# in case it's still there
+rm -f ~/.xautostart_running
+
+
+if ! [ -f ~/.noClean ]; then
+	#mail.sh stopGMail
+	pwd-agent.sh shutdown
+
+	# clear out gpg-agent's key list, rm private files (in case kill didn't work), umount encfs
+	crypt.sh clean
+fi
+
+#$HOME/.fluxbox/loadmenu.sh reset
+
+pkill xautolock
+
+

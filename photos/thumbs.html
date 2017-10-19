@@ -1,0 +1,20 @@
+<html>
+<body bgcolor=#000000 link=#00FF00 vlink=#FF00FF text=#FFFFFF>
+<center>
+<script type="text/javascript">
+
+document.open();
+document.writeln("<a name=img_-1><h2>"+parent.title+"</h2><hr><table border=0>");
+for (j=0; j < top.numpics; j++){
+	thumb_src=top.vThumb[j];
+	document.writeln("<tr><td id=cell_"+j+" align=center>"+j+
+		".</td><td><a name=img_"+j+"><img vSpace=1 onClick=parent.control.photoClicked("+j+
+		") src=\""+top.subdir+thumb_src+"\"></a></td></tr>");
+}
+document.writeln("</table>");
+document.close();
+</script>
+</center>
+<hr>
+</body>
+</html>

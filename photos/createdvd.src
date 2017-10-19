@@ -1,0 +1,383 @@
+#addToMyPath -f $MY_BIN/photos
+PATH=$MY_BIN/photos:$PATH
+
+echo "Check out Tovid at http://applications.linux.com/article.pl?sid=05/08/01/1734201&from=rss"
+
+# Archiving photos + media
+# CD = website with originals
+# DVD = DVD-playable with compressed file of originals
+# Other option: DVD = DVD-playable with (website with originals)
+
+IMAGE_EXTS="jpg JPG jpeg JPEG gif GIF png PNG"
+
+echo "If all captions.txt are complete, then you can automate this using 'makeSlideShows <DIRS>', where DIRS will be the submenus on the dvd."
+echo "If you want to test or debug, export DVDSLIDESHOWOPTS='-L'"
+. $MY_BIN/photos/photos.src > /dev/null
+
+[ -f "$HOME/.dvd-slideshowrc" ] || ln -s "$HOME/bin/photos/dvd-slideshowrc" "$HOME/.dvd-slideshowrc" || read -p "Could not create $HOME/.dvd-slideshowrc! Hit Ctrl-C."
+
+if [ ! -f "$MY_BIN/photos/createdvd.src" ]; then
+	cat > autosource <EOF
+#!/bin/bash
+. $MY_BIN/photos/createdvd.src
+
+editAllCaptions(){
+	find . -iname captions.txt -exec vim {} \\;
+}
+EOF
+
+fi
+
+which ppmtoy4m >/dev/null || { echo "You need to get mjpegtools."; read -p "Hit Ctrl-C."; }
+which convert >/dev/null || { echo "You need to get ImageMagick."; read -p "Hit Ctrl-C."; }
+#which pngtopnm >/dev/null || { echo "You need to get netpbm (netpbm-progs)."; read -p "Hit Ctrl-C."; }
+which dvdauthor >/dev/null || { echo "You need to get dvdauthor (also libdvdread-devel, libdvdcss, libpng-devel, libdvdnav)."; read -p "Hit Ctrl-C."; }
+which mpg123 >/dev/null || { echo "You need to get mpg321."; read -p "Hit Ctrl-C."; }
+which ffmpeg >/dev/null || { echo "You should get ffmpeg for AC3 encoding instead of MP2."; read -p "Hit Ctrl-C or Enter to continue."; }
+
+makeSlideShows(){
+	doAllCaptions $* || return 1
+	echo "================  Creating mpgs.."
+	doAllSlideShows $* || return 1
+}
+
+doAllCaptions(){
+	if [ -d "$1" ]; then
+		export AUTOMATE=true
+		pushd . > /dev/null
+		cd "$1"
+		for SUBDIR in * ; do 
+			if [ -d "$SUBDIR" ] ; then
+				doCaptions "$SUBDIR" -title $1 || return 1
+			fi
+		done
+		popd > /dev/null
+	else
+		echo "Not a directory: $1."
+	fi
+}
+doAllSlideShows(){
+	if [ -d "$1" ]; then
+		export AUTOMATE=true
+		pushd . > /dev/null
+		cd "$1"
+		for SUBDIR in * ; do 
+			if [ -d "$SUBDIR" ] ; then
+				cd "$SUBDIR" 
+				if [ -f ./autosource ] ; then
+					source ./autosource
+					# can also put it in slideshow.txt and "eval" the command
+				else
+					echo "autosource not found in $SUBDIR. quitting"
+					popd > /dev/null
+					return 1
+				fi
+				cd ..
+			fi
+		done
+		popd > /dev/null
+	else
+		echo "Not a directory: $1."
+	fi
+}
+
+getSuffix(){
+	printf "%03d" `grep -c "^-t" $1`
+}
+
+doCaptions(){
+	DVD_OUTDIR=~/NOBACKUP/slideshow
+	[ ! -d $DVD_OUTDIR ] && { echo "$DVD_OUTDIR does not exist."; return 1; }
+	if [ ! -f "$DVD_OUTDIR/autosource" ]; then
+		echo '#!/bin/bash
+. $MY_BIN/photos/createdvd.src
+echo "-----------------------------------"
+echo "Use 'doneSubMenu' and 'doneDVDMenu'"
+		' >> "$DVD_OUTDIR/autosource"
+	fi
+	SUBMENUTITLE=SUBMENUTITLE
+	BACKGROUNDIMG=BACKGROUNDIMG
+	#DVDSLIDESHOWOPTS=""
+	if [ -z "$1" ]; then
+cat << EOF
+	Usage: doCaptions indir [-o DVD_OUTDIR] [-title SUBMENUTITLE]
+	   where indir is path to captions.txt and images
+	   where DVD_OUTDIR is output dir (default: $DVD_OUTDIR )
+EOF
+		return 1
+	fi
+
+	imageDir="$1"
+	shift
+	while [ "$1" ] ; do
+		arg="$1"
+		case "$arg" in
+		-title) shift; SUBMENUTITLE=`echo "$1" | sed "s/\/$//"`; shift;;
+		-o) shift; 
+			if [ `echo "$1" | grep "^/"` ]; then 
+				# absolute path
+				DVD_OUTDIR="$1"
+			else 
+				DVD_OUTDIR="`pwd`/$1"
+			fi
+			shift;;
+		-b) shift; BACKGROUNDIMG="$1"; shift ;;
+		#-L) shift; DVDSLIDESHOWOPTS="$DVDSLIDESHOWOPTS -L" ;;  # use low-quality mode
+		??*) echo "Skipping unknown argument $1."; shift;;
+		esac
+	done
+
+	if [ ! -d "$imageDir" ]; then
+		echo "Dir not found: imageDir=$imageDir"
+		return 1
+	fi
+
+	pushd "$imageDir" > /dev/null	
+
+	captionFile="captions.txt"
+	slideshowScript="slidescript.txt"
+	if [ ! -f "$captionFile" ]; then
+		echo "Could not find $captionFile.  Creating ..."
+		createCaptionFile $imageDir
+	fi
+
+	echo "Using DVD_OUTDIR=$DVD_OUTDIR"
+
+	echo "Converting $captionFile ..."
+	rm -f "$slideshowScript"
+	[ ! -f "$captionFile.orig" ] && cp "$captionFile" "$captionFile.orig"
+	dos2unix "$captionFile"
+
+	shortTitleLine=`grep shortTitle "$captionFile"`
+	titleBackgroundImg=`echo $shortTitleLine | cut -d ":" -f 2`
+	shortTitle=`echo $shortTitleLine | cut -d ":" -f 3`
+
+	echo "titleBackgroundImg=$titleBackgroundImg shortTitle=$shortTitle"
+
+	for imgExt in $IMAGE_EXTS ; do
+		sed -i "s/$imgExt$/$imgExt::/" "$captionFile"
+	done
+	cp -f "$captionFile" "$slideshowScript"
+	# remove non-dvd-slideshow commands and comments
+	sed -i "/shortTitle/d; /^#/d; /^AUDIO\.MP3:/d" "$slideshowScript"
+	# remove mp3
+	sed -i "/\.mp3:/d; /^#/d; /\.MP3:/d" "$slideshowScript"
+	# set background to black after title slide
+	sed -i '/^title:/a background:0::black' "$slideshowScript"
+	# insert fadein if needed
+	grep "fadein:1" "$slideshowScript" || sed -i "/^title:/a fadein:1" "$slideshowScript"
+	# insert crossfade before images;
+	for imgExt in $IMAGE_EXTS ; do
+		sed -i "/\.$imgExt:/i\crossfade:1" "$slideshowScript"
+	done
+	# delete first crossfade
+	sed -i `grep -n -m 1 "crossfade" "$slideshowScript" | cut -d ":" -f 1`d "$slideshowScript"
+	echo "  added 'crossfade:1's between images and fixed any missing ::"
+	# insert fadeout if needed
+	grep "fadeout:2" "$slideshowScript" || echo "fadeout:2" >> "$slideshowScript"
+
+	# check for missing image files
+	unset MISSINGIMAGE
+	for imgExt in $IMAGE_EXTS ; do
+		grep "\.$imgExt" "$slideshowScript" | cut -d ":" -f 1 | while read IMGFILE; do
+			if [ ! -f "$IMGFILE" ]; then
+				echo "!!!! Image does not exists: $imageDir/$IMGFILE" >&2
+				MISSINGIMAGE="true"
+			fi
+		done
+	done
+	[ "$MISSINGIMAGE" ] && return 1
+
+#---------------------------------------------------------------
+
+	# remove spaces and quotes from shortTitle
+	# xargs in dvd-slideshow has problems with quotes
+	local ssOutdir=$DVD_OUTDIR/out-`basename $imageDir`-`echo "$shortTitle" | sed 's/ //g;s/'\''//g'`
+	mkdir -p "$ssOutdir"
+
+	AUDIOOPTS=""
+	for audioFile in *.mp2 *.mp3 *.ogg *.wav *.MP2 *.MP3 *.OGG *.WAV ; do
+		if [ -f "$audioFile" ]; then
+			echo "Using audio file $audioFile."
+			AUDIOOPTS="$AUDIOOPTS -a \"$audioFile\""
+		fi
+	done
+
+	rm -f autosource
+	if [ -f "$titleBackgroundImg" ]; then
+		BKOPTS="-b \"$titleBackgroundImg\""
+	else
+		for imgFile in *.jpg *.JPG *.jpeg *.JPEG *.gif *.GIF *.png *.PNG; do
+			if [ -f "$imgFile" ]; then
+				echo "Title background image does not exists: $titleBackgroundImg"
+				echo "  Using images file $imgFile instead."
+				echo "# Title background image does not exists: $titleBackgroundImg" >> autosource
+				BKOPTS="-b \"$imgFile\""
+				break;
+			fi
+		done
+	fi
+
+	DVDSS_CMD="dvd-slideshow $DVDSLIDESHOWOPTS -n \"$shortTitle\" -t 5 -f slidescript.txt -o \"${ssOutdir}\" $BKOPTS $AUDIOOPTS $*"
+
+	echo $DVDSS_CMD 
+	echo "$DVDSS_CMD" >> autosource
+
+#---------------------------------------------------------------
+
+	topmenuScript="$DVD_OUTDIR/createTopMenu.sh"
+	if [ ! -f $topmenuScript ] ; then
+		echo "Creating $topmenuScript."
+		cat > $topmenuScript <<EOF
+#!/bin/bash
+export linksPerColumn=7
+export MY_DVDMENU_SRC="$MY_BIN/photos/dvd-menutop-rc"
+#  -b BACKGROUNDIMG -a AUDIO \\
+dvd-menu -D -n "`date +%Y-%m`" -o . \\
+EOF
+		chmod +x $topmenuScript
+	fi
+
+	menuScript="$DVD_OUTDIR/createSubMenu.sh"
+	suffix="`getSuffix $topmenuScript`-$SUBMENUTITLE"
+	if [ ! -f $menuScript ] ; then
+		echo "Creating $menuScript.  Remember to edit it."
+		cat > $menuScript <<EOF
+#! /bin/bash
+
+renameFinalFiles(){
+	#dnlam: so that we have unique submenu filenames
+	if [ -f menu.vob ] && [ -f vmgm.xml ]; then
+		mv -v menu.vob menu-${suffix}.vob
+		mv -v vmgm.xml vmgm-${suffix}.xml
+		sed -i 's/".\/menu.vob"/".\/menu-'$suffix'.vob"/g' vmgm-${suffix}.xml
+		sed -i '/<post> jump vmgm menu 1; <\/post>/i  <!--MainMenu button--> <button> jump vmgm menu 1; </button>' vmgm-${suffix}.xml
+ 	else
+		return 1
+	fi
+}
+
+export MY_DVDMENU_SRC="$MY_BIN/photos/dvd-menu-rc"
+#  -b BACKGROUNDIMG -a MENUAUDIO \\
+dvd-menu -D -c -o dvd -n "$SUBMENUTITLE" \\
+EOF
+		chmod +x $menuScript
+	fi
+
+	echo "Appending to $menuScript"
+	echo "  -t \"$shortTitle\" -f \"$ssOutdir/`echo $shortTitle.xml | sed "s/ /_/g;s/\'//g"`\" \\" >> $menuScript
+
+#---------------------------------------------------------------
+
+	if [ -z "$AUTOMATE" ] ; then
+		echo ---------------------------------
+		vim slidescript.txt
+		echo "Run autosource."
+		echo "REPEAT for each slideshow.  Then,"
+		echo "cd $DVD_OUTDIR; doneSubMenu"
+		echo "REPEAT for each submenu.  Finally,"
+		echo "cd $DVD_OUTDIR; doneDVDMenu"
+		echo ---------------------------------
+	else
+		popd > /dev/null
+		echo ---------------------------------
+	fi
+}
+
+doneSubMenu(){
+	[ -z "$DVD_OUTDIR" ] && DVD_OUTDIR=.
+	[ -z "$menuScript" ] && menuScript="$DVD_OUTDIR/createSubMenu.sh"
+	[ -z "$topmenuScript" ] && topmenuScript="$DVD_OUTDIR/createTopMenu.sh"
+	if [ ! -f "$menuScript" ]; then
+		echo "Cannot find createSubMenu.sh:  Not in the slideshow dir."
+		return 1
+	fi
+	if [ -f vmgm.xml ]; then
+		echo "!! vmgm.xml already exists!  Exiting."
+		return 1
+	fi
+	echo '  -t "Main Menu"' >> $menuScript
+	echo "renameFinalFiles" >> $menuScript
+	vim $menuScript
+	if [ -z "$1" ]; then
+		#echo "Usage: $0 submenuName"
+		subMenuOption=`grep -o -- '-n .*$' $menuScript | sed s/-n/-t/`
+	else
+		subMenuOption=$1
+	fi
+	# should be the same suffix as in doCaptions function above
+	suffix="`getSuffix $topmenuScript`"
+	echo "Using subMenuOption=$subMenuOption"
+	echo "$subMenuOption" >> "$topmenuScript"
+	echo "Now, executing bash $menuScript"
+	mkdir $DVD_OUTDIR/dvd
+	bash $menuScript
+	mv $menuScript "$menuScript-$suffix"
+
+}
+
+doneDVDMenu(){
+	[ -z "$DVD_OUTDIR" ] && DVD_OUTDIR=.
+	[ -z "$topmenuScript" ] && topmenuScript="$DVD_OUTDIR/createTopMenu.sh"
+	{
+      echo '<dvdauthor dest="dvd" jumppad="off">'
+      echo '<vmgm>'
+      echo '      <menus>'
+      echo '           <subpicture lang="EN" />'
+      echo '           <pgc entry="title" >'
+      echo '               <vob file="menu.vob" />'
+	 let numSubMenus="`ls vmgm-*.xml | wc -l`"
+	 let count=1
+	 while (( $numSubMenus >= count )); do 
+      echo '               <button> jump titleset '$count' menu; </button>'
+	  let count=count+1
+	 done
+      echo '               <button> exit; </button>'
+      #dnlam:not needed:must use with pause="inf" echo '               <post> jump vmgm menu 1; </post>'
+      echo '           </pgc>'
+      echo '      </menus>'
+      echo '</vmgm>'
+	} > vmgmdvd.xml
+
+	cat vmgm-*.xml > vmgm-sub.xml
+	sed -i 's/entry=\"title\"// ; /titleset>/d ; /vmgm>/d ; s/<\/dvdauthor>/<\/titleset>/ ; s/<dvdauthor .*>/<titleset>/'  vmgm-sub.xml
+
+	cat vmgm-sub.xml >> vmgmdvd.xml
+	echo '</dvdauthor>' >> vmgmdvd.xml
+	rm -f vmgm-sub.xml
+
+	if [ ! -f menu.mpg ]; then
+		grep -- "-t Exit" $topmenuScript || echo "-t Exit" >> $topmenuScript
+		vim $topmenuScript
+		bash $topmenuScript
+		mv -vf vmgm.xml{,.notUsed}
+	fi
+
+	# echo "echo [dvd-menu] Running dvdauthor..."
+	[ "$AUTOMATE" ] && vim vmgmdvd.xml
+	read -p "About to run dvdauthor.  Hit Ctrl-C to cancel."
+	rm -rf dvd/*
+	dvdauthor -o dvd -x vmgmdvd.xml
+}
+
+makeSlideShowsBG(){
+	echo ". $MY_BIN/photos/createdvd.src makeSlideShows "$@"" > makeSlideShowsBG.sh	
+	# need to redirect stdin and stdout to null and stderr to stdout
+	local outfile=nohup.makeSlideShowsBG.out
+	echo "---------- Running: $*" >> $outfile
+	echo "Use 'ps' to see it."
+	nohup sh makeSlideShowsBG.sh < /dev/null >> $outfile 2>&1 &
+	#( (nohup $* < /dev/null 2>&1) && (echo "-- Done: $*" < /dev/null >> nohup.out 2>&1) ) < /dev/null > /dev/null 2>&1 &
+}   
+
+burndvd(){
+	echo "Untested"
+	ISO_FILE="dvd-`date +%Y-%m-%d-%T`.iso"
+	mkisofs -dvd-video -o $ISO_FILE dvd
+	#burn it using scsi-layer
+	growisofs -Z /dev/scsi/host0/bus0/target0/lun0/cd=$ISO_FILE
+}
+
+
+[ "$1" ] && echo "Executing $*" && $*
+

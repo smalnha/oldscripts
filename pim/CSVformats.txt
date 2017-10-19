@@ -1,0 +1,23 @@
+kaddrbk:
+"Formatted Name","Family Name","Given Name","Additional Names","Honorific Prefixes","Honorific Suffixes","Nick Name","Birthday","Home Address Street","Home Address Locality","Home Address Region","Home Address Postal Code","Home Address Country","Home Address Label","Business Address Street","Business Address Locality","Business Address Region","Business Address Postal Code","Business Address Country","Business Address Label","Home Phone","Business Phone","Mobile Phone","Home Fax","Business Fax","Car Phone","ISDN","Pager","Email Address","Mail Client","Title","Role","Organization","Note","URL","Department","Profession","Assistant's Name","Manager's Name","Spouse's Name","Office","IM Address","Anniversary"
+
+yahoo:
+"First","Middle","Last","Nickname","Email","Category","Distribution Lists","Yahoo! ID","Home","Work","Pager","Fax","Mobile","Other","Yahoo! Phone","Primary","Alternate Email 1","Alternate Email 2","Personal Website","Business Website","Title","Company","Work Address","Work City","Work State","Work ZIP","Work Country","Home Address","Home City","Home State","Home ZIP","Home Country","Birthday","Anniversary","Custom 1","Custom 2","Custom 3","Custom 4","Comments"
+
+# index of YahooAddressbook = field
+# 1 = First
+# 3 = Last
+# 4 = Nickname
+# 5 = Email
+# 9 = home (phone)
+# 10 = work (phone)
+# 13 = mobile (phone)
+# 17 = alt email 1
+# 35 = Custom 1
+# 39 = Comments
+
+dnlam:
+First,Middle,Last,Nickname,Email,Category,Distribution Lists,Yahoo! ID,Home,Work,Pager,Fax,Mobile,Other,Yahoo! Phone,Primary,Alternate Email 1,Alternate Email 2,Personal Website,Business Website,Title,Company,Work Address,Work City,Work State,Work ZIP,Work Country,Home Address,Home City,Home State,Home ZIP,Home Country,Birthday,Anniversary,Custom 1,Custom 2,Custom 3,Custom 4,Comments
+
+pine:
+CSVtoPine='sed "s/^\([^,]*\),\([^,]*\),\([^,]*\),\([^,]*\),\([^,]*\),/\4  \3, \1 \2\   \5              /" ~/workspace/$USER/addressbook.csv > ~/.addressbook'

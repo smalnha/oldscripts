@@ -1,0 +1,219 @@
+#!/bin/bash
+
+echo "------ $0 .xautostart running -------------- `date +%c:%N`"
+
+if [ -f ~/.xautostart_running ]; then
+   echo ".xautostart already running.  Quitting this instance."
+elif [ -z "$DISPLAY" ]; then
+   echo "!!! DISPLAY variable not set !!!  Not continuing."
+else
+   touch ~/.xautostart_running
+
+# should already be sourced by .xsession
+# source $HOME/.bash_profile "- 'sourced by ~/.xautostart'"
+
+# window manager started
+
+if [ -f .runSingleton.src ] ; then
+   . .runSingleton.src
+else
+   function runSingleton(){
+      echo ".runSingleton.src is missing: $@"
+   }
+fi
+
+# export the current environment, in case it needs to be debugged
+# env > ~/.xenv
+
+# if  [ -f /etc/laptop ] && lsmod | grep "nvidia" ; then
+#   unset BACKGROUND
+# fi
+
+# Unselect the following line to get a BIG mouse cursor in Xfce :
+# xset +fp "/usr/share/xfce/cursors"
+# update-alternatives --set x-cursor-theme (see /etc/alternatives/x-cursor-theme)
+
+# Set up additionnal fonts that ship with Xfce (Change id38121117)
+# xset fp+ "/usr/share/xfce/fonts"
+
+[ -f $HOME/.fonts/autosource ] && . $HOME/.fonts/autosource
+
+# mouse acceleration and threshold
+case "$HOSTNAME" in
+	dell6k) xset m 4 7 ;;
+	blackhat) xset m 4 5 ;;
+esac
+
+# increase keyboard repeat-rate
+xset r rate 400 65 
+
+if xmodmap -pm | grep -q "Caps_Lock" ; then
+   # prints errors if ran twice b/c keycodes already changed
+   xmodmap ~/.Xmodmap
+fi
+
+# turn off beeps
+# set -b
+
+if [ "$tailXLOG" ]; then
+   [ -f $HOME/.xsession-errors ] && XLOG="$HOME/.xsession-errors"
+   [ -f $HOME/.xorg-errors    ] && XLOG="$HOME/.xorg-errors"
+   [ -f $HOME/.x-errors      ] && XLOG="$HOME/.x-errors"
+   export XLOG
+   # [ "$XLOG" ] && runSingleton -c "^aterm -name tail_xsession" "aterm -name tail_xsession -tint white -fade 30 -sh 100 -title \"$XLOG\" -e tail -n 50 -f \"$XLOG\""
+
+   # [ -f $HOME/.fluxbox.log ] && runSingleton -c "^aterm -name tail_wm" "aterm -name tail_wm -tint gray -fade 50 -shading 95 -title \"$WINDOW_MANAGER.log\" -e tail -n 50 -f $HOME/.$WINDOW_MANAGER.log"
+   # [ -r /var/log/syslog ] && runSingleton -c "^aterm -name tail_syslog" "aterm -name tail_syslog -tint gray -fade 50 -shading 95 -title \"/var/log/syslog\" -e tail -n 50 -f /var/log/syslog"
+fi
+
+case "$WINDOW_MANAGER" in
+   fluxbox | fvwm)
+      # to get rid of default pixelated grey background, set it when no kdm or kdm's background is not black
+      xsetroot -solid "#000000"
+   ;;
+esac
+
+[ -f "~/todo.txt" ] && runSingleton -c "^aterm -name todo" "aterm -name todo -tint gray -fade 50 -shading 90 -e vim ~/todo.txt"
+
+#runSingleton -c "mrxvt " "xterm.sh"
+
+# http://www.kde.org/areas/sysadmin/startup.php#kdeinit
+# for printing and kde apps; can probably be delayed
+# However, gtklp or xpp is a good replacement for kprinter
+# needed for kile
+# kdeinit &
+
+echo "--> $WINDOW_MANAGER $DISPLAY"
+xsetroot -solid "#000000"
+case "$WINDOW_MANAGER" in
+   enlightenment) ;;
+   fluxbox) #taken care of by .fluxbox/init: rootCommand
+   ;;
+   *)
+      if [[ "$DISPLAY" != :* ]]; then # do not use quotes for pattern matching
+         # if not local
+         xsetroot -solid "#000011"
+      elif [ -f "$HOME/.fehbg" ]; then
+         ( sleep 8
+           . $HOME/.fehbg
+         ) &
+      elif [ -f "$BACKGROUND" ]; then
+			# must set background for gkrellm transparency to work
+         (  sleep 8
+           #[ "" ] && ~/bin/rotateImage.sh
+           { which feh && feh --bg-center $BACKGROUND; } ||
+           { which fbsetbg && fbsetbg $BACKGROUND; } ||
+           { which display && display -window root -raise 5x5 -backdrop $BACKGROUND; } ||
+           { which xsetbg && xsetbg -onroot $BACKGROUND; }  # doesn't support gkrellm transparency
+         ) &
+      fi
+   ;;
+esac
+
+case "$HOSTNAME" in 
+   "$MY_LIPSMACHINE" | "knop" | shannon ) 
+      runSingleton -c "opera" "browser.sh"
+      #appendToQueue2 \"gaim\"
+      ;;
+   *)
+      ;;
+esac
+
+# ======================  The following are delayed apps ========================
+
+if [ -f ~/.nvidia-settings-rc ]; then
+	nvidia-settings --load-config-only
+fi
+
+echo "-------- .xautostart: waiting for idle cpu to start non-essential apps ---------  `date`"
+
+pgrep -U $USER xautolock && killall xautolock
+
+xautolock -noclose -corners "++00" -cornerdelay 0 -cornersize 5 -time 1 -locker "~/.xautostart1"
+sleep 3
+xautolock -noclose -corners "++00" -cornerdelay 0 -cornersize 5 -time 1 -locker "~/.xautostart2"
+sleep 5
+
+# waitAWhile(){
+#    CURR_WINDOW_ID=`xprop -root | grep "^_NET_ACTIVE_WINDOW" | awk '{print $5}'`
+#    xmessage "waiting $*" &
+#    WAIT_PID=$!
+#    #echo $WAIT_PID xmessage "waitAWhile $*" 
+#    sleep 1
+#    wmctrl -i -a "$CURR_WINDOW_ID"
+# 
+#    local increment
+#    let increment=$1/10
+#    if which osd_cat > /dev/null; then
+#       for (( i=0; i<$1; i+=$increment )); do
+#          pgrep xmessage | grep $WAIT_PID || return 0
+#          osd_cat --pos=bottom --barmode=percentage --indent=10 --color=${OSD_COLOR:-yellow} --delay $increment -P $(($i*100/$1)) --text="$(($1-$i)) seconds remaining $2"; 
+#       done
+#       osd_cat --pos=bottom --barmode=percentage --indent=10 --color=${OSD_COLOR:-yellow} --delay $increment -P $(($i*100/$1)) --text="$(($1-$i)) seconds remaining $2"; 
+#    else
+#       sleep $1
+#       xmessage -geometry +0+50 -timeout 10 "Sleeping for $1 s.  Need apt-get install xosd-bin."
+#    fi
+#    echo "$1 seconds passed"
+#    kill $WAIT_PID
+# }
+# 
+# unset DELAYED_QUEUE2
+# appendToQueue2(){
+#    DELAYED_QUEUE2[$((${#DELAYED_QUEUE2[*]}))]="$*"
+# }
+# which gkrellm > /dev/null && appendToQueue2 -c \"gkrellm\" \"nice -n 19 gkrellm -w\"
+#
+# OSD_COLOR=cyan waitAWhile 30 "until stage 2"
+# [ "$DISPLAY" ] && for (( i=0; i<${#DELAYED_QUEUE[*]}; i++ )); do
+#    # echo runSingleton ${DELAYED_QUEUE[$i]}
+#    CURR_WINDOW_ID=`xprop -root | grep "^_NET_ACTIVE_WINDOW" | awk '{print $5}'`
+#    eval runSingleton ${DELAYED_QUEUE[$i]} 
+#    sleep 1
+#    echo "CURR_WINDOW_ID=$CURR_WINDOW_ID"
+#    wmctrl -i -a "$CURR_WINDOW_ID"
+#    sleep 4
+# done
+# 
+# OSD_COLOR=blue waitAWhile 120 "until stage 3"
+# [ "$DISPLAY" ] && for (( i=0; i<${#DELAYED_QUEUE2[*]}; i++ )); do
+#    CURR_WINDOW_ID=`xprop -root | grep "^_NET_ACTIVE_WINDOW" | awk '{print $5}'`
+#    eval runSingleton ${DELAYED_QUEUE2[$i]}
+#    sleep 1
+#    echo "CURR_WINDOW_ID=$CURR_WINDOW_ID"
+#    wmctrl -i -a "$CURR_WINDOW_ID"
+#    sleep 4
+# done
+
+# Start-up stuff from ~/Desktop/Autostart directory, if it exists
+# (as it seems to be the a standard)
+if [ -d "$HOME/Desktop/Autostart" ]; then
+  for i in `ls -1 ${HOME}/Desktop/Autostart/ 2>/dev/null`; do
+   if [ -x $HOME/Desktop/Autostart/$i ]; then
+    $HOME/Desktop/Autostart/$i &
+    sleep 5
+   fi
+  done
+fi
+
+
+# turn screen blanking to 600sec=10min
+xset s 300
+# turn on monitor energy star features: standby, suspend, off
+xset dpms 900 1200 1800
+
+if which xautolock &> /dev/null; then
+   # see .Xresources for other settings
+   runSingleton xautolock
+elif which xscreensaver &> /dev/null ; then
+   # use xscreensaver: xscreensaver-demo to configure
+   runSingleton "xscreensaver -no-splash"
+fi
+
+rm -f ~/.xautostart_running
+
+fi
+
+$MY_BIN/online/direct/notify.sh "Finished ~/.xautostart"
+echo "-------- .xautostart done ---------  `date`"
+

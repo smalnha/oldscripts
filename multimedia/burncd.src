@@ -1,0 +1,96 @@
+# to burn a directory of files to cd
+
+echo "Check out GnomeBaker"
+
+# mkisofs: -J for windows compatibility; -r for Unix/Linux compat
+# -f to follow symbolic links
+function makeiso(){
+	if [ $# -eq 0 ]; then
+		echo "makeiso label dir"; return 1
+	else
+		local ISOFILE=$1
+		shift
+		local VOLLABEL=$ISOFILE
+		local BURNDIR=$1
+		shift
+		pushd $BURNDIR || return 1
+		echo "mkisofs -J -r -v -o ../$ISOFILE.iso -V $VOLLABEL $* ."
+		      mkisofs -J -r -v -o ../$ISOFILE.iso -V $VOLLABEL $* .
+		popd
+		echo "mounting $ISOFILE ..."
+		# may have to source .bashrc
+		echo "
+		mkdir -p $ISOFILE
+		sudo mount -t iso9660 -o loop $ISOFILE.iso $ISOFILE
+		cdrecord -sao -v -eject padsize=63s -pad speed=${CDW_SPEED:-12} $1
+		"
+	fi
+}
+
+# locate device e.g., 0,0,0 or /dev/cdrom (for kernel 2.6)
+if [ "2.6" ]; then
+	alias cdscan='cdrecord dev=ATAPI --scanbus'
+	# CD_DEVICE="ATAPI:0,0,0"
+else
+	alias cdscan='cdrecord --scanbus'
+	CD_DEVICE="0,0,0"
+fi
+
+echo "Use cdrtools (formerly cdrecord) instead?"
+
+function blankcdrw(){
+	cdrecord dev=$CD_DEVICE -v blank=fast
+}
+
+# cdrecord
+function burncd(){
+	if [ $# -eq 0 ]; then
+		echo "burncd isofilename"; return 1
+	else
+		# Notice the -pad option in the preceding command. Without it, this CD will not read correctly on some computers. This is  due to the well documented "ISO-9660 filesystem read ahead bug".
+		# 12/27/2004: Recent developments in the Linux world have made even -pad insufficient for many burning tasks. I now also recommend padsize=63s. 
+		echo cdrecord dev=${CD_DEVICE:-/dev/cdrom} -sao -v -eject padsize=63s -pad speed=${CDW_SPEED:-12} $1
+	fi
+}
+
+# copy CD to CD
+function copycd(){
+	if [ $# -eq 0 ]; then
+		echo "copycd /dev/cdrom"; return 1
+	else
+		cdrecord -v -isosize dev=${CD_DEVICE:-/dev/cdrom} speed=${CDW_SPEED:-24} $1
+	fi
+}
+
+# copy CD to HD, then burn
+function copycd2hd(){
+	if [ $# -eq 0 ]; then
+		echo "copycd2hd /mnt/cdrom /dev/cdrom filename.iso"; return 1
+	else
+		mount $1
+		dd if=$2 of=$3
+		echo "DRY RUN: cdrecord -v -eject -fs=8m -dummy dev=${CD_DEVICE:-/dev/cdrom} speed=${CDW_SPEED:-24} $3"
+		echo "  remove -dummy to really burn"
+		cdrecord -v -eject -fs=8m -dummy dev=${CD_DEVICE:-/dev/cdrom} speed=${CDW_SPEED:-24} $3
+	fi	
+}
+
+# multisession
+function burnmulti(){
+	if [ $# -eq 0 ]; then
+		echo ""; return 1
+	else
+		echo "for starting a multisession cd:"
+		echo "	cdrecord -v -eject speed=${CDW_SPEED:-24} dev=${CD_DEVICE:-/dev/cdrom} -multi test.iso"
+		echo "for continuing the cd:"
+		echo "	mkisofs -o test2.iso -Jr -V ${VOLLABEL:-Session2} -C `cdrecord dev=${CD_DEVICE:-/dev/cdrom} -msinfo` -M ${CD_DEVICE:-/dev/cdrom} /files/path/"
+		echo "for the last session:"
+		echo "	omit the -multi option"
+	fi
+}
+
+
+# assumes dev is 0,0,0
+# may want to try Grip or cdparanoia for ripping and then K3b
+# basic instructions: makeiso label files; burncd label.iso
+# cd-to-cd burn:

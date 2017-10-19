@@ -1,0 +1,345 @@
+#!/bin/bash
+
+# need myBasename and getLastExt
+. $MY_BINSRC/functions.src
+
+IMAGE_PATTERNS="*.jpg *.gif *.JPG *.GIF *.jpeg *.JPEG *.png *.PNG"
+
+echo "To initialize dirname:    newPhotos dirname"
+echo "After updating dirname/captions.txt:  createPicHtmls dirname"
+echo "To move orig dir to dirname: mvToDVD dirname"
+
+COMMONDIR="_common"
+setupPhotosDir(){
+	local BINPH="$HOME/bin/photos"
+	if [ -d $BINPH ] ; then
+		echo "Initializing directory for photos"
+		[ -d "$COMMONDIR" ] || ln -s "$BINPH" "$COMMONDIR"
+#		ln -s $BINPH/control.html
+#		ln -s $BINPH/instructs.html
+#		ln -s $BINPH/photosindex.js
+#		ln -s $BINPH/photos.src
+#		ln -s $BINPH/thumbs.html
+		echo ". $COMMONDIR/photos.src" > autosource
+	else
+		echo "$BINPH does not exists. Go get it."
+	fi
+}
+[ ! -f autosource ] && setupPhotosDir
+
+extractIptcCaption(){
+	local gotCaption
+	iptcprint "$1" | grep "Application2.Caption" | while read FIELD HEX TYPE NUMBER CAPTION; do 
+		[ "$gotCaption" ] && { echo "!!! More than one caption found for $1"; return 1; }
+		echo $CAPTION
+		gotCaption=true
+	done
+}
+alias getImageFilenames='cut -d ":" -f 1 captions.txt'
+getImageCaption(){
+	grep "^$1" captions.txt | cut -d ":" -f 3
+}
+getTitle(){
+	grep "title:" $1/captions.txt | cut -d ":" -f 3
+}
+
+
+removeAllOrig(){
+	find -name orig -exec rm -rf {} \;
+}
+
+resetPhotos(){
+	if ! [ -d $1 ] ; then
+		echo "Directory ($1) does not exist."
+	else	
+		rm -rf $1/html $1/index.html
+		rm -rf $1/images
+	fi
+}
+
+resizePhotos(){
+	if ! [ -d $1/orig ] ; then
+		echo "Directory ($1/orig) does not exist. Skipping."
+	else
+		mkdir $1/images
+		pushd $1/orig
+		for picF in $IMAGE_PATTERNS 
+		do
+			if [[ "$picF" = "*thumb*" ]] || [ "$picF" = "branding.gif" ] || [ "$picF" = "play.gif" ] || [ "$picF" = "stop.gif" ] || [ "$picF" = "pause.gif" ] || [ "$picF" = "prev.gif" ] || [ "$picF" = "next.gif" ] || [ "$picF" = "blank.gif" ] ; then 
+				echo "skipping $picF"
+			elif [ -f "$picF" ] ; then
+				local DESTFILE="../images/`myBasename "$picF" '.*'`$3.`getLastExt "$picF"`"
+				if [ -f "$DESTFILE" ] ; then
+					echo "$DESTFILE already exists. Skipping."
+				else 
+					echo "Converting $picF to $DESTFILE"
+					convert "$picF" -resize $2 "$DESTFILE"
+				fi
+			fi
+		done
+		popd
+	fi
+}
+
+createWebpics(){
+	resizePhotos $1 800x600 ""
+}
+createThumbnails(){
+	resizePhotos $1 100x100 ".thumb"
+}
+
+createPicHtmls(){
+	if [ -z "$1" ] ; then
+		echo "USAGE: createPicHtmls dirname"
+		return 1
+	elif [ ! -f $1/captions.txt ] ; then
+		echo "Captions ($1/captions.txt) does not exist."
+		return 1
+	else
+		mkdir $1/html
+		pushd $1
+		PREVCOUNTER=`echo $(ls | wc -l)`
+		let PREVCOUNTER=$PREVCOUNTER-1
+		local COUNTER=0;
+		local NEXTCOUNTER=1;
+		for PIC in `getImageFilenames` 
+		do
+			#echo `pwd`/images/$PIC
+			if [ -f images/$PIC ] ; then
+				HTMLFILE=html/$COUNTER.htm
+				IMAGE_CAPTION=`getImageCaption "$PIC"`
+				echo "Creating $HTMLFILE ..."
+				cat > $HTMLFILE <<EOF
+<html>
+<body bgcolor=#000000 text=white onLoad=top.control.updatePhotoText()>
+$COUNTER
+<a href=${NEXTCOUNTER}.htm><img border=0 align=right src="../$COMMONDIR/buttons/next.gif"></a>
+<a href=${PREVCOUNTER}.htm><img border=0 align=right src="../$COMMONDIR/buttons/prev.gif"></a>
+<br clear=right><center><img src="../images/${PIC}">
+<br> $IMAGE_CAPTION
+</center>
+[<a href=../orig/${PIC}>original image</a>]
+</body></html>
+EOF
+
+				PREVCOUNTER=$COUNTER
+				COUNTER=$NEXTCOUNTER
+				let NEXTCOUNTER=$NEXTCOUNTER+1
+			fi
+		done
+		popd
+	fi
+}
+
+getDepth(){
+	local DEPTH=0
+	local BASEDIR=$PWD
+	pushd $1 > /dev/null
+	while [ "$PWD" != "$BASEDIR" ]; do
+		let DEPTH++
+		cd ..
+		[ "$PWD" = "$HOME" -o "$PWD" = "/" ] && return 1
+	done;
+	popd > /dev/null
+	echo $DEPTH
+}
+
+publishPhotos(){
+	if [ -z "$1" ] || [ ! -d $1 ] ; then
+		echo "Directory (\"$1\") does not exist."
+		return 1
+	else
+		local TITLE=`getTitle "$1"`
+
+		
+		local DEPTH=`getDepth "$1"`
+		[ -z "$DEPTH" -o "$DEPTH" = "0" ] && return 1
+		local RELDIR=".."
+		for((i=1; i<$DEPTH; i++)); do
+			RELDIR="../$RELDIR"
+		done
+
+		pushd $1
+
+		[ -d "$COMMONDIR" ] || ln -s "$RELDIR/$COMMONDIR"
+#		for COMMONFILE in control.html thumbs.html instructs.html photosindex.js; do
+#			ln -s $RELDIR/$COMMONFILE
+#		done
+#		for COMMONIMG in buttons/next.gif buttons/prev.gif; do
+#			ln -s $RELDIR/$COMMONIMG
+#		done	
+
+		indexFile=index.html
+		echo "Creating $indexFile ..."
+
+		local IMAGES_FILES="";
+		for picF in `getImageFilenames` ; do
+			local ThumbFILE="images/`myBasename $picF '.*'`.thumb.`getLastExt $picF`"
+			[ -f "$ThumbFILE" ] || continue
+			if [ "$IMAGES_FILES" ]; then
+				IMAGES_FILES="$IMAGES_FILES, \"$ThumbFILE\""
+			else
+				IMAGES_FILES="\"$ThumbFILE\""
+			fi
+		done;
+		cat > $indexFile <<EOF
+<html>
+<script type="text/javascript">
+var title="$TITLE";
+// old: var subdir="$1/";
+var reldepth="$RELDIR";  // path to main photo website, used by control.html
+var vThumb = new Array( $IMAGES_FILES );
+var commondir="$COMMONDIR/";  // used by photoindex.js
+</script>
+<script type="text/javascript" src="$COMMONDIR/photosindex.js"></script>
+Please enable javascript on your browser to view the spiffy version of this webpage.
+<br>Or you can go to <a href=html/0.htm>here</a> for the plain version.
+</html>
+EOF
+		popd
+		
+		#createLink on main page
+		if [ ! -f index.htm ] ; then
+			echo '<!-- insert new pics here -->' >> index.htm
+		fi
+		# if $TITLE is more than one line, sed will err
+		sed -i.bak "/<\!--\ insert/i <li>(new) <a href=\"$1/index.html\">$1: $TITLE</a>" index.htm
+
+		[ -f "index.html" ] || ln -s index.htm index.html
+	fi
+}
+
+fixWindowsHtmFiles(){
+	if [ -z "$1" ] || [ ! -d $1 ] ; then
+		echo "Directory (\"$1\") does not exist."
+		return 1
+	else
+		pushd $1
+		echo "Modifying html/*.htm files (if any) ..."
+	
+		for htmlF in html/*.htm ;
+		do
+			sed -i.bak "s/\(text=white\)>/\1 onLoad=\"top.control.updatePhotoText()\">/" $htmlF
+			sed -i.bak "s/\(#000000\"\)>/\1 text=white onLoad=\"top.control.updatePhotoText()\">/" $htmlF
+		done
+		
+		mkdir bak
+		mv html/*.bak bak
+		popd
+	fi
+}
+createCaptionFile(){		
+	#ls $1/orig > $1/captions.txt
+	#pushd .
+	local shortTitle
+	if [ "$2" ] ; then
+		shortTitle=$2
+	else 
+		shortTitle=$1
+	fi
+	pushd $1 || return 1
+	[ -f captions.txt ] && [ ! -f captions.orig ] && mv captions.txt captions.orig
+	local title="$shortTitle"
+	if [ -f "Picasa.ini" ] ; then
+		# extract title from Picasa.ini
+		shortTitle=`sed --quiet '/\[Picasa\]/,/\[/ p' Picasa.ini | grep "location="`
+		shortTitle=${shortTitle##*=}
+		title=`sed --quiet '/\[Picasa\]/,/\[/ p' Picasa.ini | grep "description="`
+		if [ "$title" ]; then
+			title=${title##*=}
+		else
+			title="$shortTitle"
+		fi
+	fi
+	{
+		echo "# shortTitle:TITLE.JPG:$shortTitle" 
+		echo "title:5:$title"
+		#echo "fadein:1"
+		for IMAGESf in $IMAGE_PATTERNS; do
+			if [ -f "$IMAGESf" ]; then
+				local IMG_CAPTION=`extractIptcCaption "$IMAGESf"`
+				[ "$IMG_CAPTION" ] || IMG_CAPTION=`myBasename "$IMAGESf" '.*'`
+				echo "${IMAGESf}::$IMG_CAPTION" >> captions.txt
+			fi
+		done
+		#echo "fadeout:2" >> captions.txt
+	} >> captions.txt
+
+	popd
+#	if [ -z "$2" ] ; then
+		read -p "About to edit $1/captions.txt ... Press a key"
+		vim $1/captions.txt
+#	fi
+}
+
+newPhotos(){
+	if [ ! -d "$1" ] ; then
+		echo "USAGE: newPhotos dirname"
+		return 1
+	else
+		if [ ! -d $1/orig ] ; then
+			echo "Directory (\"$1/orig/\") will be created.  Moving all image files in $1 to $1/orig"
+			mkdir "$1/orig" || return 1
+			pushd "$1"
+			mv $IMAGE_PATTERNS orig/
+			#echo "Now, try the same command again."
+			popd
+		fi
+		#pushd $1/orig
+		#popd
+		if [ -f "$1/captions.txt" ] ; then 
+			[ -f "$1/captions.txt" ] && [ ! -f "$1/captions.orig" ] && cp "$1/captions.txt" "$1/captions.orig"
+			dos2unix $1/captions.txt
+			####sed -i "s/jpg/JPG/; s/mpg/MPG/; s/dsc/DSC/; s/mov/MOV/" $1/captions.txt
+		fi
+		if [ ! -f "$1/captions.txt" ] ; then 
+			echo "Creating $1/captions.txt since it doesn't exist. Rerun createPicHtmls $1 to update captions."
+			createCaptionFile "$1/orig" "$1" || return 1
+			mv "$1/orig/captions.txt" "$1"
+		fi
+	
+		mkdir "$1/images"
+		echo "Creating thumbnails ..."
+		createThumbnails $1
+		echo "Creating webpics ..."
+		createWebpics $1
+		echo "Creating individual picture htmls ..."
+		createPicHtmls $1 $1
+		echo "Publishing photos ..."
+		#echo "title=`getTitle $1`" 
+		local TITLE="`getTitle $1`"
+		if [ -z "$TITLE" ]; then 
+			if [ ! -f $1/title ]; then
+				echo "Inserting \"title:5:$1\" into captions.txt.  Edit the title and rerun newPhotos $1."
+				echo "title:5:$1" >> $1/captions.txt
+			else
+				pushd $1
+				echo "Inserting (cat $1/title) into $1/captions.txt"
+				local title=`cat title`
+				sed -i 1i\ "title $title" captions.txt
+				popd
+			fi
+		fi
+		publishPhotos $1
+	fi
+}
+
+
+mvToDVD(){
+	ORIGDIR=`find -type d -name "orig"`
+	for ADIR in $ORIGDIR ; do 
+		DESTNAME=${1:-./forDVD}/${ADIR%/*}
+		mkdir -p $DESTNAME
+		cp -u ${ADIR%/*}/captions.txt $DESTNAME
+		mv "$ADIR"/* "$DESTNAME"; # mv ./2004-02/orig $1/./2004-02
+		rmdir $ADIR || read -p "Could not rmdir $ADIR."
+		ln -s "$DESTNAME" "$ADIR"
+	done
+
+	find -iname "*.mp3" | while read ADIR; do
+		DESTNAME=${1:-./forDVD}/${ADIR%/*}
+		mv "$ADIR" "$DESTNAME"; # mv ./2004-02/x.mp3 $1/./2004-02
+	done
+}
+
+

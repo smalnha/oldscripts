@@ -1,0 +1,386 @@
+#!/bin/bash
+
+#alias copyFilesTo='cp -upL *'
+
+#alias getXselection.compile='gcc -I/usr/X11R6/include -L/usr/X11R6/lib -o getXselection getXselection.c -lX11'
+#alias setnumlock.compile='gcc -I/usr/X11R6/include -L/usr/X11R6/lib -o setnumlock setnumlock.c -lX11 -lXtst'
+
+case "$PWD" in  
+	$HOME/bin/src)
+	   if [ -f "/usr/local/src/autosource" ]; then
+			echo "File /usr/local/src/autosource already exists."
+		elif cd /usr/local/src; then
+			sudo chgrp $USER .
+			sudo chmod g+w .
+			ln -s $HOME/bin/src/usrlocalbin.autosource autosource
+		fi
+	;;
+	*/src)
+		case "$1" in
+			"") echo "Usage: . autosource <filename|dirname>"
+				echo "	<dirname> can be ipager, tablaunch, fluxbox, aterm, mrxvt, conky"
+				echo -e "You may need to do the following: \n\
+	sudo chgrp $USER . \n\
+	sudo chmod g+w . \n"
+			;;
+  # 		conky)
+  # 			[ -d "cairo" ] || cvs -z3 -d :pserver:anoncvs@cvs.freedesktop.org:/cvs/cairo co cairo
+  # 			[ -d "libsvg-cairo" ] || cvs -z3 -d :pserver:anoncvs@cvs.freedesktop.org:/cvs/cairo co libsvg-cairo
+  # 			[ -d "conky" ] || svn co https://conky.svn.sourceforge.net/svnroot/conky/trunk/conky2 conky
+  # 		;;
+			mrxvt)
+				[ -d "mrxvt" ] || svn checkout https://svn.sourceforge.net/svnroot/materm/mrxvt05b mrxvt
+			;; 
+			ipager)
+				[ -d "ipager" ] || svn co svn://svn.useperl.ru/ipager ipager
+			;;
+			fvwm)
+				if [ ! -d "fvwm" ]; then
+					sudo apt-get install build-essential gcc binutils git-core
+					sudo apt-get install autoconf autogen automake1.9 autotools-dev libtool
+					sudo apt-get install libstroke0-dev libreadline-dev librsvg2-dev
+					#echo "Not critical to install"
+					#sudo apt-get install libgtk1.2-dev gdk-imlib-dev 
+					echo "Password is 'guest'"
+					cvs -d :pserver:anonymous@cvs.fvwm.org:/home/cvs/fvwm login
+					cvs -d :pserver:anonymous@cvs.fvwm.org:/home/cvs/fvwm checkout fvwm
+					cd fvwm
+				fi
+			;;
+			fluxbox)
+				if [ ! -d "fluxbox" ]; then
+					sudo apt-get install build-essential gcc binutils git-core
+					sudo apt-get install autoconf autogen automake1.9 autotools-dev libtool 
+					sudo apt-get install libx11-dev xlibs-dev libimlib2-dev libxft2-dev libgtk-dev
+					git clone git://git.fluxbox.org/fluxbox.git
+					cd fluxbox
+				fi
+			;;
+			tablaunch)
+				if [ ! -d "tablaunch" ]; then
+					export CVS_RSH=ssh
+					mkdir tablaunch
+					cd tablaunch
+					cvs -z3 -d:ext:$USER@tablaunch.cvs.sourceforge.net:/cvsroot/tablaunch co -P .
+				fi
+			;;
+			jgnash)
+				if [ ! -d "jgnash" ]; then
+					echo "Use empty password"
+					mkdir jgnash
+					cd jgnash
+					cvs -z3 -d:pserver:anonymous@jgnash.cvs.sourceforge.net:/cvsroot/jgnash co -P .
+				fi
+			;;
+			aterm) # download aterm source in order to compile with enabled menubar
+				if [ ! -d "aterm" ]; then
+					export CVS_RSH=ssh
+					cvs -z3 -d :pserver:anonymous@cvs.aftercode.net:/home/cvsroot co aterm1
+				fi
+			;;
+			exiv*.tar.gz)  # for extracting iptc and metadata from images
+			;;
+			install_flash_player*)  # install the Macromedia Flash browser plug-in
+				# /mnt/installationFiles/linux/mozilla/install_flash_player_6_linux
+				./flashplayer-installer
+				# but the script doesnt install the software system-wide. To have multiple users on the system:
+				cp .mozilla/plugin/{libflashplayer.so,flashplayer.xpt} /usr/lib/mozilla/plugins/
+			;;
+			png2ico-src-*.tar.gz)
+			;;
+			slmodem-*.tar.gz)
+			;;
+			submount-*.tar.gz)  # awesome - no need to (u)mount usb keys or floppys
+				SUBDIR="submount-0.9"
+				if [ ! -d "$SUBDIR" ]; then
+					tar -zxvf "$1"
+				fi
+				if pushd $SUBDIR; then
+					cd subfs-*/
+					make && sudo make install
+					read -p "You may need to add subfs to /etc/modules.  About to 'sudo modprobe subfs'."
+					sudo modprobe subfs
+
+					cd submountd-*/
+					./configure
+					make && sudo make install
+
+					echo "----------------------------------------------------"
+					echo "Now, you need to add entries to /etc/fstab like this:"
+					#mkdir /mnt/usbA
+					echo "  /dev/sda1  /mnt/usbA  subfs  fs=vfat,rw,users,umask=0 0 0" #>> /etc/fstab
+					read -p "About to edit /etc/fstab."
+					sudo vim /etc/fstab
+				fi
+			;;
+			vmware-any-any-update*.tar.gz)
+				# VMWare
+				# may need to do export CC=/usr/bin/gcc-2.95 and /usr/bin/vmware-config.pl
+				# only need vmnet0 bridged
+				# since knoppix 3.4 didn't come with the 2.6.5 /usr/src headers, had to get headers and recompile kernel
+				# see kernel-upgrade.txt
+			;;
+			NVIDIA-Linux-*.run)
+				nvidiaForXorg(){
+					sh NVIDIA-Linux-x86-1.0-6629-pkg1.run -a -n --x-prefix /usr/local/X11R6.8
+				}
+				nvidiaForXorg-uninstall(){
+					sh NVIDIA-Linux-x86-1.0-6629-pkg1.run --x-prefix /usr/local/X11R6.8 --uninstall
+				}
+				setupNVidia(){
+					# monitor specs: http://www.griffintechnology.com/archive/monitor.html
+					# nVidia driver: http://www.nvidia.com/object/linux_display_archive.html
+					#  http://www.nvidia.com/object/linux_display_ia32_1.0-4496.html
+					#  new 5??? drivers messes up console virtual terminals
+					# If you already have an XF86Config file working with a different driver
+					# (such as the 'nv' or 'vesa' driver), then all you need to do is find
+					# the relevant Device section and replace the line:
+					#			Driver "nv" (or Driver "vesa")
+					# to		Driver "nvidia"
+					# In the Module section, make sure you have:
+					#			Load	"glx"
+					# You should also comment out the following lines:
+					#			Load  "dri"
+					#			Load  "GLcore"
+					echo "May need to export CC=/usr/bin/gcc-2.95"
+					if  ! grep nvidia /etc/modutils/* ; then
+					echo "alias char-major-195 nvidia" >> /etc/modutils/nvidia
+					update-modules
+					fi
+					# see this first: http://www.techspot.com/tweaks/geforce/index.shtml
+					cat /proc/driver/nvidia/cards/0
+					# check for fast write and SBA capabilities
+					cat /proc/driver/nvidia/agp/host-bridge
+					# if supported, to enable AGP Fast Writes and Site Band Addressing, can add the following
+					# below the "alias char-major-195 nvidia" line:
+					options nvidia NVreg_EnableAGPSBA=1 NVreg_EnableAGPFW=1
+					Option "NoLogo" "true"
+					# see status
+					cat /proc/driver/nvidia/agp/status
+					# checking APM. The NVIDIA graphics driver does not yet provide support for ACPI.
+					dmesg | grep -i apm
+				}
+			;;
+			*) echo "Unknown package: $1"
+			;;
+		esac
+	;;
+	*/src/mrxvt)
+		#old: ./configure --enable-minimal --enable-selectionscrolling --enable-mousewheel --enable-mouseslipwheel --enable-utmp --enable-wtmp --enable-cursor-blink --enable-transparency --enable-fading --enable-tinting --enable-xft --enable-xim --enable-backspace-key --enable-ttygid --enable-delete-key --enable-resources --enable-swapscreen --disable-dependency-tracking --with-save-lines=300 --with-max-term=8
+
+		./bootstrap.sh && \
+		./configure --enable-minimal --enable-mousewheel --enable-utmp --enable-wtmp --enable-lastlog --enable-sessionmgr --enable-256colors --enable-cursor-blink --enable-pointer-blank --enable-transparency --enable-tinting --enable-xpm --enable-jpeg --enable-png --enable-xrender --with-tab-radius=50 --with-x && \
+		make && \
+		sudo make install
+	;;
+	*/src/ipager)
+		scons
+		sudo scons install
+	;;
+	*/src/fvwm)
+		sh utils/configure_dev.sh
+		./configure --prefix=/usr/local --disable-nls --disable-gtk 
+		make
+		sudo make install
+	;;
+	*/src/fluxbox)
+		installFluxboxSandbox(){
+		make DESTDIR=~/NOBACKUP/fluxbox-sandbox install
+		}
+
+		for AFILE in /usr/bin/{fluxbox,fbrun,bsetroot}; do
+		#echo "Moving current version of $A."
+		[ -f "$AFILE" ] && sudo mv -iv "$AFILE"{,.old}
+		done
+
+		read -p "Configure fluxbox? (Enter=YES, Ctrl-D=NO) "
+		./autogen.sh
+		echo "--------------------------------------"
+		local CONFIGURE_ARGS=""
+#		if read -p "Enable toolbar? (Enter=YES, Ctrl-D=NO) "; then
+#		: echo "Yes toolbar"
+#		else
+#		CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-toolbar"
+#		fi
+#		echo
+		echo "--------------------------------------"
+		if read -p "Enable xinerama? (Enter=YES, Ctrl-D=NO) "; then
+		CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-xinerama"
+		else
+		: echo "No xinerama"
+		fi
+		echo
+		./configure --enable-imlib2 $CONFIGURE_ARGS
+
+		if read -p "sudo make && sudo make install? (Enter=YES, Ctrl-D=NO) "; then
+		sudo make && sudo make install
+		else
+		echo " Not compiling!"
+		fi
+	;;
+
+	*/src/aterm1)
+		read -p "Configure aterm?"
+		./configure --enable-transparency --enable-fading --enable-background-image --enable-menubar --enable-utmp --with-x --enable-xgetdefault --with-xpm --with-term="xterm"
+		if read -p "make && sudo make install? (Enter=YES, Ctrl-D=NO) "; then
+		make && sudo make install
+		else
+		echo " Not compiling!"
+		fi
+		# rxvt causes problem in ssh, but is useful in pine "Home" and "End" keys
+		# aterm is not popularly recognized
+	;;
+
+	*/jgnash/jgnash)
+		ant jar
+	;;
+	*/src/tablaunch)
+		# $1=version_tag
+		createRelease(){
+		if [ -z "$1" ] ; then
+					echo "A revision is needed as the first argument."
+					return 1
+		fi
+		txt2html -tf README > readme.html
+		cvs commit -m "release $TAG" readme.html
+		local APP="tablaunch"
+		local TAG="v${1//./_}"
+		echo ":: Tagging $TAG"
+		cvs tag -cFR "$TAG" || return 1
+		local RELDIR="$APP-$1"
+		[ -d "$RELDIR" ] && mv -v "$RELDIR{,-`date +%Y-%m-%d-%T`}" 
+		echo ":: Exporting to $RELDIR"
+		cvs export -r "$TAG" -d "$RELDIR" $APP || return 1
+		[ -d "$RELDIR" ] || return 2
+		echo ":: Tarring to $RELDIR.tar.gz"
+		tar -zcvf "$RELDIR.tar.gz" "$RELDIR" || return 3
+
+		# user=anonymous password=dnaelam@gmail.com
+		echo ":: FTP $RELDIR.tar.gz"
+		echo "cd incoming
+					pwd
+					put $RELDIR.tar.gz
+					bye
+					" | ftp -i upload.sourceforge.net || return 10
+
+		echo "Add release notes, change log, and tar.gz file at sourceforge"
+		case "$APP" in
+					"tablaunch")
+						#browser.sh "https://sourceforge.net/account/login.php?return_to=%2Fproject%2Fadmin%2Feditpackages.php%3Fgroup_id%3D128507"
+						browser.sh "https://sourceforge.net/project/admin/newrelease.php?package_id=140704&group_id=128507"
+						browser.sh "http://freshmeat.net/add-release/51932/55707/"
+					;;
+		esac
+
+		} 
+	;;
+
+	*/src/smallutils)
+		for PROGRAM in getXselection setnumlock; do
+		if read -p "Install $PROGRAM? (Enter=YES, Ctrl-D=NO)"; then
+					make $PROGRAM
+		fi
+		done
+	;;
+
+	*/src/debs)
+		cat <<-EOF  You can install the following via apt:
+		tetex-base tetex-bin tetex-extra kile
+		wmctrl  # interact with window manager, http://sweb.cz/tripie/utils/wmctrl/
+		plugger # makes plugins work better in mozillla browser, http://fredrik.hubbe.net/plugger/test.html
+					# flash: http://www.macromedia.com/
+					# realaudio: http://www.realaudio.com/
+		pdftk	# for headers and cover page
+		dvdauthor 
+		apt-get -t unstable install kopete  # to fix problems: dpkg --force overwrite -i /var/cache/apt/archives/kdelibs-data_4%3a3.2.1-1_all.deb
+		fetchyahoo libterm-readkey-perl
+		file-roller2  # tgz, zip, ... archive GUI viewer
+		toolame 
+
+		libdvdcss2  # to play commercial DVDs; may also want libxine1
+		# If your DVD plays but skips and jumps while playing the dvd, then you probably need to enable dma for the drive.
+		# To see if dma is enabled, log in as root and type: "/sbin/hdparm -d <device name>" For example: "/sbin/hdparm -d /dev/hdc"
+		# To enable dma type: "/sbin/hdparm -d 1 /dev/hdc"
+
+		gdeskcal 
+		xsane
+		xbindkeys	# if you want key and mouse combinations shortcuts
+
+		synaptic aptitude	# apt UIs
+
+		xf4vnc # to vnc to an existing X session
+
+		xpad  # sticky yellow notepads
+
+		xosd-bin # provides osd-cat command
+
+		x-unikey # for typing in vietnamese
+
+		dict dict-wn dict-moby-thesaurus dict-foldoc # dictionary and thesaurus
+#	Some Databases available:
+#		elements	Elements database 20001107
+#		web1913	Webster's Revised Unabridged Dictionary (1913)
+#		wn			WordNet (r) 2.0
+#		gazetteer  U.S. Gazetteer (1990)
+#		jargonJargon File (4.3.0, 30 APR 2001)
+#		foldocThe Free On-line Dictionary of Computing (27 SEP 03)
+#		eastonEaston's 1897 Bible Dictionary
+#		hitchcock  Hitchcock's Bible Names Dictionary (late 1800's)
+#		devilsTHE DEVIL'S DICTIONARY ((C)1911 Released April 15 1993)
+#		world02	CIA World Factbook 2002
+#		vera		Virtual Entity of Relevant Acronyms (Version 1.9, June 2002)
+
+
+XORG:
+	http://incubator.vislab.usyd.edu.au/roller/page/Steve?catname=Debian
+	http://blogs.vislab.usyd.edu.au/index.php/Steve/2004/09/09/installing_a_non_intrusive_x
+	when patching, don't usually have to 'make World', just 'make Everything'
+		had to patch kbd so autorepeat works properly
+	make install.man  # install man pages
+	see xc/BUILD file for more details
+
+	added path /usr/local/X11R6.8/lib to /etc/ld.so.conf to get correct libraries found
+	don't need to set LD_LIBRARY PATH
+
+
+	PERL:  use cpan to install modules
+		need apt-get install ncftp first
+
+EOF
+
+		read -p "CHECK"
+		setupLocalepurge(){
+		echo "-------------------------------------------------------"
+		# Tweaking the install
+		# http://gnubox.dyndns.org:8080/~sunil/knoppixtweak.php
+		#  /etc/modules was empty
+		echo "Localepurge needed for removing unneeded locales:" 
+		if ask "Install localepurge package?" Y; then
+			sudo apt-get install $NODOWNLOAD localepurge
+			read -p "For future reference: /etc/locale.gen, 'sudo dpkg-reconfigure localepurge'"
+
+			read -p "CHECK: Comment all except en_US.UTF-8 and any others."
+			sudo vim /etc/locale.gen
+			sudo locale-gen
+			# dpkg-reconfigure --force locales
+			echo "Keep it installed to get rid of extra locales for new packages."
+		fi
+		}
+
+		apps(){
+			echo "For knoppix kernel sources, see http://developer.linuxtag.net/knoppix/sources/"
+			apt-get install openoffice.org # to get the english version
+		# if menu fonts too small, Tools > Options > check "Apply replacement table": type "Andale Sans UI" and select "URW Gothic L"; check "Always"
+		# set kprinter as Default printer
+		# ~/.openoffice/1.1.0/spadmin
+		}
+		
+
+
+	;;
+
+	*) echo "Unknown package $PWD.  Add it to /usr/local/src/autosource"
+	;;
+esac
+
+

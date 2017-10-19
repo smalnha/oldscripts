@@ -1,0 +1,25 @@
+#
+
+#IGNORE=xfce4
+createLinks
+unset IGNORE
+
+if [ "" ] && pushd config >> /dev/null; then
+	for D in *; do
+		[ -L ~/.config/"$D" ] || ln -sn ${LINKARGS} "$PWD/$D" ~/.config/"$D"
+	done
+	popd >> /dev/null
+fi
+
+
+# This directory requires manual update
+if [ -d "$BACKUPDIR/$HOME/.config/xfce4" ]; then
+	rsync --existing -uv -rpt -c $BACKUPDIR/$HOME/.config/xfce4/  config/xfce4/ --dry-run
+	echo "----------------------------------------------"
+	echo "--- To perform rsync; then, remove directory: "
+	echo "    rsync --existing -uv -rpt -c $BACKUPDIR/$HOME/.config/xfce4/ config/xfce4/"
+	echo "    rm -rf $BACKUPDIR/$HOME/.config/xfce4/"
+	echo "----------------------------------------------"
+fi
+
+

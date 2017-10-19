@@ -1,0 +1,1321 @@
+#!/usr/bin/perl -w
+#
+#    GotMail - perl script to get mail from hotmail mailboxes.
+#    Copyright (C) 2000-2003 Peter Hawkins <peterhawkins@ozemail.com.au>
+#    Copyright (C) 2005 Michael Ziegler.
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#    -----------------------------------------------------------------------
+#    Currently maintained by John Fruetel <jfruetel@hotmail.com> 
+#    Peter Hawkins and Paul Cannon are no longer involved with the 
+#    development of this software.
+#
+
+require 5.004;
+
+eval "use Mail::SpamAssassin;";
+use English;
+use URI::Escape;
+use POSIX qw(tmpnam);
+use FileHandle;
+use strict;
+
+# Signal handlers:
+$SIG{INT} = $SIG{TERM} =
+	sub {
+		my($text) = @_;
+		print STDERR "gotmail died with message: $text\n";
+		print STDERR "Exiting abnormally, cleaning temp files.\n";
+		doCleanTempFiles();
+		exit(1);
+	};
+
+# Hide command line in a "ps" listing;
+$0 = '[ gotmail getting new messages ]';
+# This is not great security. The command line can still be found by other
+# users. I recommend using a ~/.gotmailrc file, so that curl will be passed
+# the username and password via private temporary files.
+
+# Don't allow others to read our temp files
+my($oldumask) = umask(077);
+
+# Constants...
+# FIXME: This opens the possibility of race conditions.
+my($tmp_headers) = tmpnam()."gotmail_headers";
+my($tmp_cookies) = tmpnam()."gotmail_cookies";
+my($tmp_formdata) = tmpnam()."gotmail_form";
+
+my($log) = "/tmp/gotmail_log";
+my($gotmail_version) = "0.8.4";
+my($gotmail_date) = "2005-06-16";
+
+# 0 will be the default for hotmail.com
+my(@domains) = ("hotmail.com",
+		"msn.com",
+                "charter.com",
+                "compaq.net",
+                "hotmail.co.jp",
+                "hotmail.co.uk",
+                "hotmail.de",
+                "hotmail.fr",
+                "hotmail.it",
+                "messengeruser.com",
+                "passport.com",
+                "webtv.net");
+
+# Some option dependent variables
+my($conf_proxy)="";
+my($conf_proxy_auth)="";
+my($login) = "";
+my($password) = "";
+my($domain) = 'hotmail.com';
+my($resend_address) = "";
+my($conf_file) = "";
+my(@conf_exclude_folders) = ();
+my(@conf_folders) = ();
+my($conf_folder_directory) = "";
+my($conf_only_get_new_messages) = 0;
+my($conf_mark_messages_as_read) = 0;
+my($conf_delete_messages_after_download) = 0;
+my($conf_move_messages_after_download) = "";
+my($conf_sendmail) = "";
+my($conf_curl) = 'curl -k';
+my($conf_speed_limit) = 0;
+my($conf_retry_limit) = 2;
+my($conf_verbosity) = 0;  # -1 = silent; 0 = normal; 1 = verbose; 2 = debug spew
+my($conf_smtpserver) = "";
+my($conf_save_to_login) = 0;   # 0 = no, 1 = yes
+my($conf_procmail) = 0; # 0 = no, 1 = yes
+my($conf_sa) = 0; # 0 = no, 1 = yes
+my($conf_nodownload) = 0; # 0 = no, 1 = yes
+my($conf_deletespam) = 0; # 0 = no, 1 = yes
+my($conf_movespam) = "";
+my($conf_spamscore) = 4.5;
+my($conf_procmail_bin) = '/usr/bin/procmail';
+my($conf_procmail_option)= "";
+my($conf_remove_header) = 0;  # 0 = no, 1 = yes
+
+# Global variables...
+my($host) = ""; # The name of the hotmail server we are talking to...
+my($gotconfig) = 0; # Have we found a config file?
+my(@cookies) = ();
+my($spam_folder_id) = ""; # Id of the folder where we want to move spam
+my($move_folder_id) = ""; # Id of the folder where we want to move mail
+my($trashFolder) = ""; # Id of the trash can folder
+
+# Display some text to the screen, and log it, if we are in debug mode.
+sub dispText($)
+{
+	my($text) = @_;
+
+	if ($conf_verbosity >= 0) {
+		print $text;
+	}
+
+	if ($conf_verbosity > 1) {
+		my($out) = new FileHandle ">> $log" || return;
+		print $out $text;
+		close $out;
+	}
+}
+
+# Various utility functions
+sub dispIntroText()
+{
+	if ($conf_verbosity >= 0)
+	{
+		print "Gotmail v".$gotmail_version."    Copyright (C) 2000-2003 Peter Hawkins\n";
+		print "Gotmail comes with ABSOLUTELY NO WARRANTY.\n";
+		print "This is free software, and you are welcome to redistribute it\n";
+		print "under certain conditions; see the file COPYING for details.\n\n";
+
+		if ($conf_verbosity > 1) {
+			my($out) = new FileHandle ">> $log" || return;
+			print $out "Gotmail v".$gotmail_version." logfile.\n";
+			close $out;
+		}
+	}
+}
+
+sub dispVersionText()
+{
+	print "Version information: Gotmail v".$gotmail_version."   Date: ".$gotmail_date."\n";
+}
+
+sub dispUsageAndExit()
+{
+	# We are about to quit, so we want to show the user everything.
+	$conf_verbosity = 0;
+	dispIntroText();
+
+	print "Usage:\ngotmail [OPTIONS...]\n";
+
+	print "\nOptions:\n";
+	print "  -?, --help, --usage       Display this screen\n";
+	print "  --version                 Display version information\n";
+	print "  -c, --config-file <file>  Specify config file (default ~/.gotmailrc)\n";
+	print "  -u, --username <name>     Specify your hotmail username (REQUIRED)\n";
+	print "  -p, --password <pass>     Specify your hotmail password (REQUIRED)\n";
+	printf("  %-26s%-50s\n","-d, --domain <domain>", "Specify domain:");
+	foreach my $domainname (@domains) {
+		printf("%-44s%-36s\n", "", $domainname);
+	}
+
+	print "  --proxy <host:port>       Specify an HTTP proxy to use. Format is\n" .
+	      "                              host:port - eg: localhost:3128\n";
+	print "  --proxy-auth <user:pass>  Specify authentification details for the\n" .
+	      "                              HTTP proxy.\n";
+	print "  -s, --smtpserver <server> Specify SMTP server. Will not use sendmail\n";
+	print "  -f, --forward <address>   Specify an email address to forward to. If a\n" .
+	      "                              forwarding address is not given, messages\n" .
+	      "                              will be saved to disk\n";
+	print "  --exclude-folders \"folders\"\n" .
+	      "                            Do not get these folders (list of folders in\n" .
+	      "                              quotes, i.e.: \"Inbox, Bulk Mail\")\n";
+	print "  --folders \"folders\"       Only get these folders (list of folders in\n" .
+	      "                              quotes, i.e.: \"Inbox, Bulk Mail\")\n";
+	print "  --folder-dir /my/dir      Download messages into this directory\n";
+	print "  --only-new                Only unread messages will be retrieved\n";
+	print "  --mark-read               Messages will be marked as read once downloaded\n";
+	print "  --delete                  Messages will be deleted after download\n";
+	print "  --move <folder>           Messages will be moved to this folder after download\n";
+	print "  --retry-limit max_tries   Maximum number of attempts to download a message\n";
+	print "  --speed-limit             Throttle back rate of giving messages to sendmail\n";
+	print "  --save-to-login           Save to folder-dir/username for Inbox and\n"
+	    . "                              /folder-dir/username-foldername for others\n";
+	print "  --use-procmail            Send all messages only to procmail\n";
+	print "  --procmail-bin <path>     Use this program as procmail (default is\n" .
+	      "                              /usr/bin/procmail) (implies --use-procmail)\n";
+	print "  --procmail-option <opt>   Pass options through to procmail\n";
+	print "  --curl-bin <path>         Specify the path to the cURL program if it's\n" .
+	      "                              not in your path.\n";
+	print "  --silent                  Do not print messages\n";
+	print "  -v, --verbose             Verbosely print messages\n";
+	print "  --debug                   Print debug output\n";
+	print "  --use-sa                  Use SpamAssassin to ignore spam\n";
+	print "  --delete-spam             Delete spam from server when using SpamAssassin\n";
+	print "  --move-spam <folder>      Move spam to this folder\n";
+	print "  --spam-score              SpamAssassin score that's considered spam (default 4.5)\n";
+	print "  --nodownload              Don't download anything (useful for clearing spam)\n";
+	print "  --remove-header           Automatically remove X-Message-Info header to not\n";
+	print "                              trigger X_MESSAGE_INFO rule in SpamAssassin\n";
+	exit();
+}
+
+# Parse ~/.gotmailrc
+#
+# Inserted code to parse ~/.gotmailrc
+# This *should* hopefully be a little secure than specifying your
+# username and password on the command line.
+# parseArgs() is called afterwards, so you can override any settings.
+# Thanks to Patrick Froede
+#    and also to Tim Dijkstra. -pik-
+
+sub parseConfig {
+	if ("@ARGV" =~ /(\s|^)(-c|--config-file)\ ([\w\.~\/\-\@]*)(\s|$)/i) {
+		$conf_file = $3;
+		if (! -r $conf_file) {
+			die "Config file <$conf_file> is not readable!\n";
+		}
+	} elsif ($ENV{"HOME"}) {
+		$conf_file = $ENV{"HOME"} . "/.gotmailrc";
+	} else {
+		if (-e $ENV{"HOMEDRIVE"} . $ENV{"HOMEPATH"} . ".gotmailrc") {
+			# Using w2k environment variables.
+			$conf_file = $ENV{"HOMEDRIVE"} . $ENV{"HOMEPATH"} . ".gotmailrc";
+		} elsif (-e "/.gotmailrc") {
+			# Try root directory
+			$conf_file = "/.gotmailrc";
+		} else {
+			# Or try current directory
+			$conf_file = "./.gotmailrc";
+		}
+	}
+
+	# Open the config file, otherwise bail out of this subroutine
+	open(RCFILE, $conf_file) || return;
+
+	# I made these options identical to the ones in the arguments.
+	# To avoid breaking compatibility, the old names can also be
+	# used. -pik-
+
+	# Parse the file
+	while (<RCFILE>) {
+		next if ($_ =~ /^#/);
+		if ($_ =~ /^user(name)?=(.+)$/i) {
+			$login = $2;
+		} elsif ($_ =~ /^pass(word)?=(.+)$/i) {
+			$password = $2;
+		} elsif ($_ =~ /^domain=(.+)$/i) {
+			foreach my $domainname (@domains) {
+				if ( $domainname eq $1 ) {
+					$domain = $1;
+					last;
+				}
+			}
+		} elsif ($_ =~ /^proxy=(.+)$/i) {
+			$conf_proxy = $1;
+		} elsif ($_ =~ /^proxy_auth=(.+)$/i) {
+			$conf_proxy_auth = $1;
+		} elsif ($_ =~ /^forward(ing-email)?=(.+)$/i) {
+			$resend_address = $2;
+		} elsif ($_ =~ /^exclude-folders=(.+)$/i) {
+			@conf_exclude_folders = split(/ *, */, $1);
+		} elsif ($_ =~ /^folders=(.+)$/i) {
+			@conf_folders = split(/ *, */, $1);
+		} elsif ($_ =~ /^folder[_-]dir(ectory)?=(.+)$/i) {
+			$conf_folder_directory = $2;
+			# expand $HOME if this is passed in the conf
+			$conf_folder_directory =~s/\$HOME/$ENV{HOME}/;
+			if ($conf_folder_directory !~ /\/$/) {
+				# Make sure it has a trailing slash
+				$conf_folder_directory.="/";
+			}
+		} elsif ($_ =~ /^retry-?limit=([0-9]+)$/i) {
+			$conf_retry_limit=$1;
+		} elsif ($_ =~ /^delete-?spam/i) {
+			$conf_deletespam = 1;
+		} elsif ($_ =~ /^move-spam=(.+)$/i) {
+			$conf_movespam = $1
+		} elsif ($_ =~ /^move=(.+)$/i) {
+			$conf_move_messages_after_download = $1
+		} elsif ($_ =~ /^spam-score=(\d+)$/i) {
+			$conf_spamscore = $1
+		} elsif ($_ =~ /^(mark-?read|mark-messages-as-read)/i) {
+			$conf_mark_messages_as_read = 1;
+		} elsif ($_ =~ /^delete/i) {
+			$conf_delete_messages_after_download = 1;
+		} elsif ($_ =~ /^only-?new/i) {
+			$conf_only_get_new_messages = 1;
+		} elsif ($_ =~ /^speed-?limit/i) {
+			$conf_speed_limit = 1;
+		} elsif ($_ =~ /^use-?sa/i) {
+			$conf_sa = 1;
+		} elsif ($_ =~ /^nodownload/i) {
+			$conf_nodownload = 1;
+		} elsif ($_ =~ /^silent/i) {
+			$conf_verbosity = -1;
+		} elsif ($_ =~ /^smtpserver=(.+)$/i) {
+			$conf_smtpserver=$1;
+		} elsif ($_ =~ /^save-to-login/i) {
+			$conf_save_to_login = 1;
+		} elsif ($_ =~ /^use-procmail/i) {
+			$conf_procmail = 1;
+		} elsif ($_ =~ /^procmail-bin=(.+)$/i) {
+			$conf_procmail_bin = $1;
+			$conf_procmail = 1;
+		} elsif ($_ =~ /^procmail-option=(.+)$/i) {
+			$conf_procmail_option = $1;
+			$conf_procmail = 1;
+		} elsif ($_ =~ /^curl-bin=(.+)$/i) {
+			$conf_curl = $1;
+		} elsif ($_ =~ /^remove-header/i) {
+			$conf_remove_header = 1;
+		}
+	}
+
+	# Make a note that we obtained some configs from the options file
+	$gotconfig = 1;
+	close(RCFILE);
+}
+
+# Parse the command line
+sub parseArgs()
+{
+	# If we have a config file, we don't care if there aren't any arguments...
+	if (!@ARGV && ($gotconfig == 0)) {
+		dispUsageAndExit();
+	}
+
+	while(@ARGV) {
+		my($element)=shift(@ARGV);
+		if ($element =~ /^(-\?|--help|--usage)$/i) {
+			dispUsageAndExit();
+		}
+		elsif ($element =~ /^--version$/) {
+			dispVersionText();
+		}
+		elsif ($element =~ /^(-c|--config-file)$/) {
+			shift(@ARGV);
+		}
+		elsif ($element =~ /^(-u|--username)$/i) {
+			if (@ARGV) {
+				$login = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^(-p|--password)$/i) {
+			if (@ARGV) {
+				$password = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--proxy$/i) {
+			if(@ARGV) {
+				$conf_proxy = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--proxy-auth$/i) {
+			if(@ARGV) {
+				$conf_proxy_auth = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--folder-dir(ectory)?$/i) {
+			if(@ARGV) {
+				$conf_folder_directory = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+			if ($conf_folder_directory !~ /\/$/) {
+				# Make sure it has a trailing slash
+				$conf_folder_directory .= "/";
+			}
+		}
+		elsif ($element =~ /^(-f|--forward|--forwarding-email)$/i) {
+			if (@ARGV) {
+				$resend_address = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--exclude-folders$/i) {
+			if (@ARGV) {
+				@conf_exclude_folders = split(/ *, */, shift(@ARGV));
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--folders$/i) {
+			if (@ARGV) {
+				@conf_folders = split(/ *, */, shift(@ARGV));
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--retry-limit$/i) {
+			if (@ARGV) {
+				$conf_retry_limit = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^(-s|--smtpserver)$/i) {
+			if (@ARGV) {
+				$conf_smtpserver = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^(-d|--domain)$/i) {
+			if (@ARGV) {
+				my $tmp_domain = shift(@ARGV);
+				# $domain is already set in the top as hotmail
+				# so no need to set once again, but only
+				# check to see if the one passed from cmdline
+				# is allowed and then set it
+				foreach my $domainname (@domains) {
+					if ( $domainname eq $tmp_domain ) {
+						$domain = $tmp_domain;
+						last;
+					}
+				}
+			}
+		}
+		elsif ($element =~ /^--save-to-login$/i) {
+			$conf_save_to_login = 1;
+		}
+		elsif ($element =~ /^--only-new(-messages)?$/i) {
+			$conf_only_get_new_messages = 1;
+		}
+		elsif ($element =~ /^--mark-(messages-as-)?read$/i) {
+			$conf_mark_messages_as_read = 1;
+		}
+		elsif ($element =~ /^--delete(-messages)?$/i) {
+			$conf_delete_messages_after_download = 1;
+		}
+		elsif ($element =~ /^--speed-limit$/i) {
+			$conf_speed_limit = 1;
+		}
+		elsif ($element =~ /^--silent$/i) {
+			$conf_verbosity = -1;
+		}
+		elsif ($element =~ /^--debug$/i) {
+			$conf_verbosity = 2;
+		}
+		elsif ($element =~ /^(-v|--verbose)$/i) {
+			$conf_verbosity = 1;
+		}
+		elsif ($element =~ /^--use-procmail$/i) {
+			$conf_procmail = 1;
+		}
+		elsif ($element =~ /^--procmail-bin$/i) {
+			if (@ARGV) {
+				$conf_procmail_bin = shift(@ARGV);
+				$conf_procmail = 1;
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--procmail-option$/i) {
+			if (@ARGV) {
+				$conf_procmail_option = shift(@ARGV);
+				$conf_procmail = 1;
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--curl-bin$/i) {
+			if (@ARGV) {
+				$conf_curl = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--use-sa$/i) {
+			$conf_sa = 1;
+		}
+		elsif ($element =~ /^--delete-spam$/i) {
+			$conf_deletespam = 1;
+		}
+		elsif ($element =~ /^--nodownload$/i) {
+			$conf_nodownload = 1;
+		}
+		elsif ($element =~ /^--move-spam$/i) {
+			if (@ARGV) {
+				$conf_movespam = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--move$/i) {
+			if (@ARGV) {
+				$conf_move_messages_after_download = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--spam-score$/i) {
+			if (@ARGV) {
+				$conf_spamscore = shift(@ARGV);
+			} else {
+				dispUsageAndExit();
+			}
+		}
+		elsif ($element =~ /^--remove-header$/i) {
+			$conf_remove_header = 1;
+		}
+		else {
+			dispText("Unrecognized option $element\n");
+			dispUsageAndExit();
+		}
+	}
+
+	if (($login eq "") || ($password eq ""))
+	{
+		print STDERR "A username and password are REQUIRED.\n";
+		print STDERR "Try --help for usage info.\n";
+		exit 1;
+	}
+}
+
+# Clean up any temporary files
+sub doCleanTempFiles()
+{
+	if (-e $tmp_headers) {
+		unlink($tmp_headers)
+		  or warn "Could not unlink tmp header: $!\n";
+	}
+	if (-e $tmp_cookies) {
+		unlink($tmp_cookies)
+		  or warn "Could not unlink tmp cookie: $!\n";
+	}
+	if (-e $tmp_formdata) {
+		unlink($tmp_formdata)
+		  or warn "Could not unlink tmp formdata: $!\n";
+	}
+}
+
+sub doCleanOtherFiles()
+{
+#	if (-e $log) { unlink($log); }
+}
+
+# Check all the required programs are installed.
+sub doCheckPrograms()
+{
+	if ($conf_verbosity > 1) {
+		dispText("System version is: ".$OSNAME."\n");
+
+		# $PERL_VERSION and $^V seem to be broken
+		dispText("Perl version is:   ".$]."\n");
+	}
+
+	if ($conf_verbosity > 1) {
+		dispText("Curl version is:   ".`$conf_curl --version`."\n");
+	}
+
+	# Try looking for sendmail in a few common places.
+	$conf_sendmail = "sendmail";
+	if (-x "/usr/sbin/sendmail") {
+		$conf_sendmail = "/usr/sbin/sendmail";
+	}	elsif (-x "/usr/lib/sendmail") {
+		$conf_sendmail = "/usr/lib/sendmail"
+	}
+
+	# Make sure procmail is there.
+	if ((! -x $conf_procmail_bin) and $conf_procmail) {
+		die "Procmail binary at \"$conf_procmail_bin\" can't be run. Aborting";
+	}
+
+	# If we're doing spam detection, make sure SpamAssassin is installed
+  if ($conf_sa) {
+    eval "use Mail::SpamAssassin;";
+		if ($@) {
+      die("Spam detection specified but SpamAssassin not installed.  Aborting");
+		}
+	}
+}
+
+# Grep any cookies from the header file into the cookies file.
+sub parseHeaders()
+{
+	my $redirector = "";
+	my($in) = new FileHandle "< $tmp_headers" || return;
+
+	while (<$in>) {
+		if (m/^Location: (\S+)\s/) {
+			$redirector = $1;
+		}
+	}
+	close($in);
+
+	return $redirector;
+}
+
+# Fetch a given page using curl
+#
+# The parameters taken are the URL, any data to be posted in a POST,
+# whether we are to follow HTTP redirects, whether we should send and
+# receive cookies, and whether we should only get the headers for this
+# page and not the body.
+sub getPage($$$$$)
+{
+	my($url, $params, $follow_forward, $cookies, $headers_only) = @_;
+
+	if ($url =~ m/http:\/\/(\S+?)\//i) {
+		$host = $1;
+	}
+
+	if ($conf_verbosity > 0) {
+		dispText "FETCH: $url\n";
+	}
+
+	# Set up the options string...
+	my($options) = "";
+	if ($conf_proxy) { $options .= "--proxy ". $conf_proxy . " "; }
+	if ($conf_proxy_auth) { $options .= "--proxy-user ". $conf_proxy_auth . " "; }
+	if ($cookies != 0) { $options .= "-b $tmp_cookies -c $tmp_cookies " }
+#	if ($cookies != 0) { $options .= "-b $tmp_cookies " }
+	if ($params ne "") { $options .= "--data \"$params\" " }
+	if ($headers_only) { $options .= "-I " }
+	if ($conf_verbosity <= 0) { $options .= "-s -S " }
+	if ($conf_verbosity >= 2) { $options .= "-v " }
+
+	# Get rid of any trailing space on options.. Just for neatness.
+	$options =~ s/ $//;
+
+	my($cmdline) = "$conf_curl \'$url\' $options -i -m 600 -D $tmp_headers" .
+	               " -A \"Mozilla/4.73 [en] (Win98; I)\"";
+
+	# Copy output to logfile if necessary
+	if ($conf_verbosity > 1) {
+		$cmdline .= "| tee -a $log";
+		dispText("command line: $cmdline\n");
+	}
+
+	my $tries = 1;
+	my(@tmp_page) = `$cmdline`;
+
+	# Retry at most $conf_retry_limit times if we fail.
+	while (!@tmp_page && !$headers_only && $tries <= $conf_retry_limit) {
+		dispText("Retrying [$tries/$conf_retry_limit]...\n");
+		$tries++;
+		@tmp_page = `$cmdline`;
+	}
+	if (!@tmp_page && !$headers_only && $tries >= $conf_retry_limit) {
+		die("An error was encountered getting the page. Command was $cmdline");
+	}
+
+	my $redir = parseHeaders();
+
+	# If we have been asked to follow Location: headers
+	if ($follow_forward) {
+		if ($redir ne "") {
+      if ($redir !~ m/^http.*/i) {
+        if ($url =~ m/(http?:\/\/[^\/]+)\//i) {
+          $redir = $1 . $redir;
+        }
+      }
+			if ($conf_verbosity > 1) {
+				dispText("Following redirect to $redir\n");
+			}
+			return &getPage($redir, "", $follow_forward, $cookies, $headers_only);
+		}
+	}
+
+	if ($conf_verbosity > 0) { dispText "\n"; }
+
+	return @tmp_page;
+}
+
+# Do the HotMail login process - log in until we have the URL of the inbox.
+sub doLogin()
+{
+	dispText("Getting hotmail index page...\n");
+	my(@index_page);     ## This will have the login page.
+
+	@index_page = getPage("http://www.hotmail.com/", "", 1, 1, 0);
+	my($page) = join("", @index_page);
+
+	## @index_page is now an intermediate page which checks if you
+	## have javascript enabled or not!! This code invokes the form
+  ## on that page to get you to the login/password page.
+	if($page =~ m/<form.*((hiddenform)|(fmHF)).*action=\"(\S+)\".*>/i) {
+    my $action = $4;
+
+		## This processing happens only for the "new" hotmail structure.
+		dispText("Processing java check....\n");
+		my($inp);      ## This var will store all the input fields.
+		while($page =~ m/<\s*input\s+.*name=\"(\S+)\"(\s+id="\S+")?\s+value=\"(\S*)\"/) {
+			## Get rid of the input field we processed.
+			$page = $';
+			$inp .= "$1=" . uri_escape($3) . "\&";
+		}
+		## Get rid of the last "&"
+		$inp =~ s/&$//g;
+
+		my($FORMFILE) = new FileHandle "> $tmp_formdata" ||
+			die "Couldn't open formdata file: $!\n";
+
+		print $FORMFILE ("$inp");
+		close($FORMFILE);
+		my($params) = "\@$tmp_formdata";
+
+		## Hopefully this should get us to the correct index page.
+		@index_page = getPage($action, $params, 1, 1, 0);
+		$page = join "", @index_page;
+	}
+
+	# Find the form "ACTION" parameter...
+	my($login_script);
+  my($login_new) = 0;
+
+  # Old - multiple forms for multiple domains
+	if ($page =~ m/<form.*hotmail_com.*action=\"(\S+)\".*>/i) {
+		$login_script = $1;
+	}
+  # New - heavy javascript
+	elsif ($page =~ m/<form.*f1.*action=\"(\S+)\".*>/i) {
+		$login_script = $1;
+		$login_new = 1;
+	}
+  # Very old - simple form
+	elsif ($page =~ m/<form.*action=\"(\S+)\".*>/i) {
+		$login_script = $1;
+	}
+  else {
+		die "Page doesn't contain any form action field!\n";
+  }
+
+	my($FORMFILE) = new FileHandle "> $tmp_formdata" ||
+	                        die "Couldn't open formdata file: $!\n";
+
+  if( $login_new ) {
+		dispText("Using New Login...\n");
+
+    ## The actual action of the form is replace by javascript
+    ## (authentication depends on the domain of your user id).
+    ## and arguments are appended in javascript
+		if( $page =~ m/g_DO\["\Q$domain\E"\]\s*=\s*"([^"]+)\"/ ) {
+			$login_script = $1;
+			#dispText( "g_DO=$1\n" );
+		}
+		if( $page =~ m/g_QS\s*=\s*"([^"]+)\"/ ) {
+			$login_script .= index($login_script,'?') >= 0 ? '&' : '?';
+			$login_script .= $1;
+			#dispText( "g_QS=$1\n" );
+		}
+
+    ## Get (or calculate) the hidden fields of the form 
+		my ( $PPFT, $PPSX, $PwdPad );
+    {
+			if( $page =~ m/<\s*input\s+.*name=\"PPFT\"(\s+id="\S+")?\s+value=\"(\S*)\"/ ) {
+				$PPFT = $2;
+				#dispText( "PPFT=$PPFT\n" );
+			}
+			if( $page =~ m/<\s*input\s+.*name=\"PPSX\"(\s+id="\S+")?\s+value=\"(\S*)\"/ ) {
+				$PPSX = $2;
+				#dispText( "PPSX=$PPSX\n" );
+			}
+			{
+				my $Padding = "IfYouAreReadingThisYouHaveTooMuchFreeTime";
+				$PwdPad = substr( $Padding, 0, length($Padding)-length($password) ); 
+				#dispText( "PwdPad=$PwdPad\n" );
+			}
+		}
+
+		print $FORMFILE ("PPSX=$PPSX" .
+										 "\&PwdPad=$PwdPad" .
+										 "\&login=" . uri_escape($login . '@' . $domain, "^A-Za-z") .
+										 "\&passwd=" . uri_escape($password, "^A-Za-z") .
+										 "\&SI=" . uri_escape( '    Sign In    ' ) . 
+										 "\&LoginOptions=3" .
+										 "\&PPFT=" . uri_escape( $PPFT ) );
+  } else {
+		dispText("Using Old Login...\n");
+		my($ctnum) = "";
+		if ($page =~ m/ct=([0-9]+)/i) {
+			$ctnum = uri_escape($1);
+		}
+		print $FORMFILE ("login=" . uri_escape($login, "^A-Za-z") .
+										 "\&passwd=" . uri_escape($password, "^A-Za-z") .
+										 "\&svc=mail\&mspp_shared=1" .
+										 "\&domain=" . uri_escape($domain) .
+										 "\&RemoteDAPost=https://login.msnia.passport.com/ppsecure/post.asp" .
+										 "\&sec=share\&curmbox=ACTIVE\&js=yes\&_lang=EN" .
+										 "\&beta=0\&ishotmail=1\&id=2\&fs=1" .
+										 "\&cb=_lang%3dEN%26country%3dUS\&ct=$ctnum");
+  }
+
+	close $FORMFILE;
+	my($params) = "\@$tmp_formdata";
+
+	dispText("Logging in...\n");
+	my(@login_page) = getPage($login_script, $params, 1, 1, 0);
+	$page = join "", @login_page;
+
+	# Find where they are sending us now...
+	my($redirect_location) = "";
+
+# Now not needed per Chris Ebenezer's comments
+#	if ($domain eq 'msn.com') {
+#		if ($page =~ m/Location: (\S+)/i) {
+#			$redirect_location = $1;
+#		} elsif ($page =~ /unavailable/i) {
+#			die("Hotmail is reporting that your account is temporarily " .
+#			    "unavailable. Please try again later.\n");
+#		}
+#
+#		if ($redirect_location eq "") {
+#			die("Hotmail's page structure has changed! (msncom)\n");
+#		}
+#
+#		my(@redirect_page) = getPage($redirect_location, "", 0, 1, 0);
+#		$page = join "", @redirect_page;
+#	}
+
+	if ($page =~ m/top\.location\.replace\(\"(.*)\"\);/i) {
+		$redirect_location = $1;
+	} elsif ($page =~ m/meta\s*http-equiv="refresh"\s*content="0;\s*URL=([^"]+)"/i ) {
+    $redirect_location = $1;
+  }
+
+	if ($redirect_location eq "") {
+		die("Hotmail's page structure has changed! (redirloc)\n");
+	} elsif ($redirect_location =~ /loginerr/i) {
+		die("There was an error logging in. Please check that your " .
+		    "username and password are correct.\n");
+	}
+
+	if ($redirect_location =~ m/http:\/\/([^\/]+)\/(.*)$/i) {
+		$host = $1;
+	} else {
+		die ("Could not parse redirect location\n");
+	}
+
+	dispText("Following redirect...\n");
+	my(@redirect_page) = getPage($redirect_location, "", 0, 1, 0);
+	$page = join "", @redirect_page;
+
+	# Find where the inbox is located...
+	my($inbox_location);
+	if ($page =~ m/Location: (\S+)/i) {
+		my $inbox_loc = $1;
+    if ($inbox_loc =~ m/\&RedirectLocation=(http[^\&]+)\&/i) {
+      $inbox_loc = uri_unescape($1);
+    }
+		$inbox_loc =~ /(.+)\/dasp\/ua_info.asp\?pg=browser_limit[^&]*(&.+)/;
+		$inbox_location = "$1\/HoTMail";
+	} elsif ($page =~ /unavailable/i) {
+		die("Hotmail is reporting that your account is temporarily " .
+		    "unavailable. Please try again later.\n");
+	} else {
+		die("Hotmail's page structure has changed! (inboxloc)\n");
+	}
+
+	dispText("Going to Inbox Page: $inbox_location\n");
+	getPage($inbox_location, "", 1, 1, 0);
+
+	return $inbox_location;
+}
+
+sub doSaveEmail($$)
+{
+	my ($output, $email) = @_;
+
+	# restore umask to whatever user had before
+	umask($oldumask);
+	my($OUT) = new FileHandle ">> $output";
+
+	if (! defined ($OUT)) {
+		die("Unable to open $output.");
+	}
+
+	print $OUT "$email\n";
+
+	$OUT->close();
+}
+
+sub doResendEmail($$)
+{
+	my($destaddr, $email) = @_;
+
+	my($OUT) = new FileHandle "| $conf_sendmail $destaddr";
+
+	if (! defined ($OUT)) {
+		die("Unable to open sendmail - was using $conf_sendmail $destaddr.");
+	}
+
+	# Dump the message to sendmail.
+	if ($] >= 8.0) { # $] is the current perl version 
+		### try and stop the Wide Character warnings
+		binmode $OUT, ":utf8";
+	}
+	print $OUT $email;
+
+	$OUT->close();
+	if ($conf_speed_limit) { sleep(1); }
+}
+
+sub doResendSMTPEmail($$$)
+{
+	use Net::SMTP;
+	my($destaddr, $email, $server) = @_;
+
+	my $from = "$login\@$domain";
+	if ($email =~ s/^From ([^ ]*).*\n//) {
+		$from = $1;
+	}
+
+	dispText("Forwarding email to $destaddr by SMTP\n");
+
+	my $smtp_debug = 0;
+	if ($conf_verbosity == 2) {
+		$smtp_debug = 1;
+	}
+
+	my $mail = Net::SMTP->new($server, Debug => $smtp_debug) or
+	             die "Could not connect to SMTP server $server. $!\n";
+
+	$mail->mail($from);
+	$mail->recipient($destaddr);
+	$mail->data($email);
+	$mail->quit();
+
+	if ($conf_speed_limit) { sleep(1); }
+}
+
+# Return the email message.  Actually, it returns two versions
+# of the message, one with headers added and one without 
+sub getEmail($$)
+{
+	my($url, $folder) = @_;
+	my(@output) = ();
+
+	dispText("Getting email message...\n");
+
+	$url = "http://$host/$url\&raw=0";
+
+	my(@email_page) = getPage($url, "", 1, 1, 0);
+
+	my $emailstr = join "", @email_page;
+	if ($emailstr !~ /pre/) {
+		die("Unable to download email message - $emailstr\n");
+	}
+
+	# Get everything between the <pre> </pre> tags
+	@email_page = split(/<\/?pre>/, $emailstr);
+	if (@email_page != 3) {
+		die("Unable to download email message - $emailstr\n");
+	}
+	$_ = $email_page[1];
+
+	s/^[\s\n]*//s;
+
+	# Strip any HTML artifacts from the message body.
+	s/&amp;/&/g;
+	s/&lt;/</g;
+	s/&gt;/>/g;
+	s/&quot;/\"/g;
+  
+
+	# Add some more special headers right before the message body.
+	my($gm_headers) = "X-gotmail-version: $gotmail_version\nX-gotmail-folder: $folder\nX-gotmail-user: $login\n";
+	s/^$/$gm_headers/m;
+
+	# Remove X-Message-Info header if specified
+	if ($conf_remove_header) {
+		s/^X-Message-Info: .*?\n//m;
+	}
+
+  # Make a copy of the message without the extra headers
+  my ($noHeaders) = $_;
+
+  # We'll try to parse out the envelope sender and date received by
+	# Hotmail. Apparently, those fields are not _always_ added. If we
+	# can't find good data, we'll have to make stuff up.
+	my($from_addr) = "$login\@$domain";
+	my($from_date) = scalar gmtime;
+
+	# Strip "From whoever" when found on the first line- the format
+	# is wrong for mbox files anyway.
+	if (s/^From ([^ ]*) [^\n]*\n//s) { $from_addr = $1; }
+	elsif (m/^From:[^<]*<([^>]*)>/m) { $from_addr = $1; }
+
+	# Apply >From quoting
+	s/^From ([^\n]*)\n/>From $1/gm;
+
+	# If an mboxheader was desired, make up one
+	if (m/^\t (\w+), (\d+) (\w+) (\d+) (\d+):(\d+):(\d+) ([+-]?.+)/m) {
+		my($dow) = $1;
+		my($mon) = $3;
+		my($dom) = $2;
+		my($hr) = $5;
+		my($min) = $6;
+		my($sec) = $7;
+		my($yr) = $4;
+		my($senttz) = $8;
+
+		# Put date in mboxheader in UTC time
+		$hr -= $senttz;
+		while ($hr < 0) { $hr += 24; }
+		while ($hr > 23) { $hr -= 24; }
+
+		$from_date = sprintf ("%s %s %02d %02d:%02d:%02d %d",
+		                      $dow, $mon, $dom, $hr, $min, $sec, $yr);
+	}
+
+	# Add an mbox-compatible header
+	s/^/From $from_addr $from_date\n/;
+
+	return ($_, $noHeaders);
+}
+
+# Get the messages from a folder called $foldername at $url
+sub getFolder($$$)
+{
+	my($foldername, $url, $page) = @_;
+
+	# Get the folder in newest first order
+	dispText("Loading folder \"$foldername\" page $page...\n");
+
+	# Get the messages in whatever order Hotmail says we should
+	my(@folder) = getPage("http://$host/cgi-bin/HoTMaiL?$url\&page=$page", "", 1, 1, 0);
+
+	# Find the location of the "Next page" link
+	my $next_page_str = join("", grep(/Next Page/i, @folder));
+
+	# Redo the list on a table row by table row basis
+	my @messages;
+
+  # Get everything that looks like a mail link
+  foreach my $f (@folder)
+  {
+#    dispText("\$f->$f\n");
+#    if ($f =~ m/.*(<a href=\"javascript:G\('\/cgi-bin\/getmsg\?.*&start.*\">)/i)
+    while ($f =~ m/(<a href=\"javascript:G\('\/cgi-bin\/getmsg[^\"]*\">)/i)
+		{
+			push(@messages, $1);
+      $f = $';
+		}
+  }
+  #my $fold = join("", @folder);
+	#my @mess2= split(/<tr name=\".+\">|<\/tr>/i, $fold);
+	#my @messages = grep(/<a href=\"javascript:G\('\/cgi-bin\/getmsg\?/i, @mess2);
+
+	# Get the messages in this folder...
+  #print "\$fold:$fold";
+  #print "\@messages:@messages";
+  #print "\@mess2:@mess2";
+  
+  # Keep track if we've deleted anything from this page
+  # If we have, we don't want to skip to the next page.
+  # The current page will have new messages when
+  # it's refreshed.
+  my $deletedStuff = 0;
+
+  # For some reason, some mails are listed more than once.
+  # Sort the list of messages, then only do them once
+  @messages = sort @messages;
+  my $oldItem = "";
+	foreach my $item (@messages)
+	{
+		if ($item ne $oldItem) {
+      $oldItem = $item;
+      #dispText("\$item->$item\n");
+      $item =~ m/<a href=\"javascript:G\('\/(cgi-bin\/getmsg\?[^\']*)'\)\">/i;
+			my $msg_url = $1;
+
+			# Since the folder is in newest first order, if we are only getting
+			# new messages, and this is not a new message, we can stop here.
+
+			if ($conf_only_get_new_messages && ($item =~ /msgread/i)) {
+				next;
+			}
+
+      my ($Message, $msgNoHeaders) =getEmail($msg_url, $foldername);
+
+      # Check for spam, if requested to.  Probable SPAMS are
+      # not downloaded
+
+      if ($conf_sa) {
+        my $SpamTest = Mail::SpamAssassin -> new();
+
+        my $MessageObject = $SpamTest -> check_message_text($Message);
+        my $Score  = $MessageObject -> get_hits();
+
+        if ($Score > $conf_spamscore) {
+          if ($conf_deletespam) {
+            dispText("Deleting spam...\n");
+            getPage("http://$host/$msg_url\&_HMaction=MoveTo\&tobox=$trashFolder",
+                    "", 1, 1, 1);
+          } elsif ($conf_movespam) {
+            dispText("Moving spam...\n");
+            getPage("http://$host/$msg_url\&_HMaction=MoveTo\&tobox=$spam_folder_id",
+                    "", 1, 1, 1);
+          } else {
+            dispText("Probably spam, skipping.\n");
+          }
+          next;
+        }
+      }
+
+      # If we're just scanning for spam on the server, don't download 
+      if ($conf_nodownload) {
+        next;
+      }
+
+			# Are we resending or saving?
+			if ($conf_procmail) {
+				my($output) = $Message;
+				dispText("Sending mail message to procmail...");
+				open PR,"|" . $conf_procmail_bin." ".$conf_procmail_option;
+				print PR $output;
+				close PR;
+				dispText("Done.\n");
+			}
+			elsif ($resend_address eq "") {
+				my($output) = $Message;
+				my($outfile) = $conf_folder_directory;
+
+				if ($conf_save_to_login) {
+					$outfile .= $login;
+					if ($foldername ne "Inbox") {
+						$outfile .= ("-" . $foldername);
+					}
+				} else {
+					$outfile .= $foldername;
+				}
+
+				doSaveEmail($outfile, $output);
+				dispText("Saving message to $outfile...\n");
+			} elsif ($conf_smtpserver) {
+				my($output) = $Message;
+				doResendSMTPEmail($resend_address, $output, $conf_smtpserver);
+			} else {
+				my($output) = $msgNoHeaders;
+				doResendEmail($resend_address, $output);
+				dispText ("Forwarding message to $resend_address\n");
+			}
+
+			if ($conf_mark_messages_as_read) {
+				dispText("Marking message as read...\n");
+				getPage("http://$host/$msg_url", "", 1, 1, 1);
+			}
+
+			if ($conf_delete_messages_after_download) {
+        $deletedStuff = 1;
+				dispText("Deleting message...\n");
+				getPage("http://$host/$msg_url\&_HMaction=MoveTo\&tobox=$trashFolder", "", 1, 1, 1);
+			} elsif ($conf_move_messages_after_download) {
+				dispText("Moving message...\n");
+				getPage("http://$host/$msg_url\&_HMaction=MoveTo\&tobox=$move_folder_id", "", 1, 1, 1);
+      }
+		}
+	}
+
+	# If an active "next page" link exists, let's go there...
+	if ($next_page_str =~ m/title="Next Page"/) {
+		# If we've deleted all or some of the messages, we don't need 
+    # to go to the next page. We stay on the same page which will 
+    # now contain at least some undeleted messages.
+
+		if ($deletedStuff)  {
+			&getFolder($foldername, $url, $page);
+		} else {
+			&getFolder($foldername, $url, $page + 1);
+		}
+	}
+}
+
+# Returns the strange Hotmail 'id' for a folder name
+sub getFolderId($$$)
+{
+  my $host = shift;
+  my $folder_index_url = shift;
+  my $folder_name = shift;
+
+  my @folder_list = getPage("http://$host/cgi-bin/folders?$folder_index_url", "", 1, 1, 0);
+
+  # Join the page into one big string, and split it into bits that interest us
+  my $onestr = join "", @folder_list;
+  $onestr =~ s/\n/ /g;
+  @folder_list = grep { /<td[^>]*><a\s*href=\"\/cgi-bin\/HoTMaiL\?/ }
+                  split(/(<tr[^>]*>|<\/tr>)/, $onestr);
+
+  $onestr = join "\n", @folder_list;
+  foreach my $item (@folder_list) {
+    if ($item =~ m/<a(.*)href=\"\/cgi-bin\/HoTMaiL\?([^\"]+)\"[ ]*>([^<]+)<\/a>/) {
+      my($url) = $2;
+      my($name) = $3;
+      if (lc($name) eq lc($folder_name)) {
+        $url =~ m/curmbox=(.*)&/;
+        return($1);
+      }
+    }
+  }
+}
+
+
+# Get a list of the folders we have to deal with and parse them one by one.
+sub doGetFolders($)
+{
+	my($inbox_location) = @_;
+
+	dispText("Loading main display...\n");
+	if ($inbox_location !~ m/^http/) {
+		$inbox_location = "http://$host/cgi-bin/".$inbox_location;
+	}
+	my(@inbox_page) = getPage($inbox_location, "", 1, 1, 0);
+
+	# Ok, we have the location of the inbox. Where's the master list of folders?
+	my($folder_index_url) = "";
+	foreach my $item (@inbox_page) {
+		if ($item =~ m/<a(.*)href=\".*(\/cgi-bin\/folders\?)(\S+)\"/i) {
+			$folder_index_url = $2;
+		}
+	}
+
+  dispText("\$folder_index_url->$folder_index_url\n");
+	if ($folder_index_url eq "") {
+		die("Could not isolate folder index location\n");
+	}
+
+# Get the id of the trash can folder
+  $trashFolder=getFolderId($host, $folder_index_url, "Trash Can");
+
+	if ($conf_movespam) {
+    # Figure out the ID of the Spam folder
+    $spam_folder_id = getFolderId($host, $folder_index_url, $conf_movespam);
+    dispText("\$spam_folder_id->".$spam_folder_id."\n");
+  }
+
+	if ($conf_move_messages_after_download) {
+    # Figure out the ID of the move to folder
+    $move_folder_id = getFolderId($host, $folder_index_url, $conf_move_messages_after_download);
+    dispText("\$move_folder_id->".$move_folder_id."\n");
+  }
+
+	# Ok let's get the folder list!
+	dispText("Loading folder list...\n");
+	my @folder_list = getPage("http://$host/cgi-bin/folders?", "", 1, 1, 0);
+
+	# Join the page into one big string, and split it into bits that interest us
+	my $onestr = join "", @folder_list;
+	$onestr =~ s/\n/ /g;
+	@folder_list = grep { /<td[^>]*><a\s*href=\"\/cgi-bin\/HoTMaiL\?/ }
+	                split(/(<tr[^>]*>|<\/tr>)/, $onestr);
+
+	foreach my $item (@folder_list) {
+		if ($item =~ m/.*<a href=\"\/cgi-bin\/HoTMaiL\?(.+)\" >([^<]+)<\/a>.*/i) {
+			my($url) = $1;
+			my($name) = $2;
+
+			# Establish numbers of new, unread, total mail in box - courtesy
+			# of Jens Preikschat <preikschat@hotmail.com>
+
+			# Establish total size of mail box - may be useful in the future
+			# $item =~ m/<td align="right"><font class="Wf">(\w+)<\/font><\/td>/;
+			# my($totalSize) = $1;
+
+			# Establish "total number of messages" and "number of unread messages"
+			# in the folder
+
+			$item =~ m/<td align=center>(\d+)<\/td>\s*<td align=center>(\d+)<\/td>/;
+			my($totalItems) = $1;
+			my($unreadItems) = $2;
+
+			if ((!$conf_only_get_new_messages) || ($unreadItems > 0)) {
+				# Check that this actually _is_ a folder name, without any
+				# html tags. Also makes sure we are not getting the trash
+				# (it looks really stupid when we download a message, delete
+				# it, and then download it again from the trash and delete
+				# it into the trash yet again =)
+
+				if ( (!($name =~ /[<>]/)) && (!($name =~ /Trash Can/i)) ) {
+					$" = "~";
+					if ((!@conf_folders || ("~@conf_folders~" =~ /~$name~/i)) && 
+					    (!@conf_exclude_folders || !("~@conf_exclude_folders~" =~ /~$name~/i))) {
+					  dispText ("Processing Folder: \"" . $name .
+						          "\", Total messages: " . $totalItems .
+						          ", Unread messages: " . $unreadItems . ".\n");
+						getFolder($name, $url, 1);
+					}
+				}
+			}
+		}
+	}
+}
+
+parseConfig();
+parseArgs();
+dispIntroText();
+doCheckPrograms();
+doCleanOtherFiles();
+my($inbox_location) = doLogin();
+doGetFolders($inbox_location);
+dispText("\nAll done!\n");
+doCleanTempFiles();
+
+exit;
+
+# vim:noet:sw=2:ts=2:filetype=perl

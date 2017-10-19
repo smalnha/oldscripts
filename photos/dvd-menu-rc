@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# my variables
+menuLocationY=120
+
+#dnlam: images from composite cause ppmtoy4m failure; this fixes it
+function fixCompositeImage(){
+	unset compositeFix
+	if [ "$compositeFix" ] ; then
+		echo "dnlam: fixing composite image $1"
+		convert -depth 8 -type TrueColor -quality 100 "$1" "$tmpdir/tmpcompositefix.png"
+		convert -depth 8 -type TrueColor -quality 100 "$tmpdir/tmpcompositefix.png" "$1"
+	fi
+}
+
+
+
+
+# --------------- for dvd-menu --------------------------
+white_button_mask (){
+	# white_button_mask outfile
+	#dnlam:
+	let titleBorderHeight=$menu_location_y-10
+	convert -size ${width}x$menuh -quality 100 xc:transparent -depth 8 -fill white \
+		-draw "roundRectangle $menu_location_x,$menu_location_y,$menuright,$menubottom 20,20" \
+		-draw "Rectangle 0,0,$width,$titleBorderHeight" \
+		-crop $resolution-0-0 "$1"
+}
+
+font1='n019003l.pfb' # helvetica normal URW fonts
+font2='helr____.ttf' # helvetica regular truetype
+
+bg_color='steelblue'
+menu_height=36
+menu_width=488
+menu_location_x=160
+menu_location_y=$menuLocationY  # distance of the top of the first menu item to the top of the screen
+title_font_size=48
+#let title_location_y=
+

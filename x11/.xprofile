@@ -1,0 +1,7 @@
+
+# sourced when logging in using gdm or kdm by '/etc/gdm/Xsession default'
+# echo "Who calls .xprofile: $0 $*" >> ~/init.log
+
+# I don't think we need to source .bash_profile. It will be sourced by ~/.xsession
+#source ~/.bash_profile
+

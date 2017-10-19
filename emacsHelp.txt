@@ -1,0 +1,41 @@
+
+C-x C-f
+    find-file
+
+C-x C-s
+    save-buffer
+
+C-x s
+    save-some-buffers
+
+C-x b
+    switch-to-buffer.
+
+C-x C-b
+    list-buffers.
+
+C-x k
+    kill-buffer
+
+
+
+C-x o
+    other-window
+
+C-x 1
+    delete-other-windows
+
+C-x 0
+    delete-window
+
+C-x 2
+    split-window-vertically
+
+C-x 3
+    split-window-horizontally
+
+C-M-v
+    scroll-other-window
+
+http://www.lib.uchicago.edu/keith/tcl-course/emacs-tutorial.html
+

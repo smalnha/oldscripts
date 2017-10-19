@@ -1,0 +1,20 @@
+#machinename   dir   mount_point(alias)   type   timeout   options(comma-separated or exact options to pass without commas)
+
+set commonSMBopts="file_mode=0777,dir_mode=0777"
+
+server1           /home/me          someserver    SSHFS   60    
+
+silver           Shared               silverShared  SMBFS   60   $commonSMBopts
+xp-black         Storage              xp-black      SMBFS   60   $commonSMBopts
+
+192.168.11.101  Save  BarocoSave SMBFS 60 $commonSMBopts
+192.168.11.102  Backup  JoeBackup SMBFS 60 $commonSMBopts
+
+# mygateway   Shared   silverGW   password=" "
+# silverWireless   Shared    silverWL   password=""
+# andy   Ba   ba    password=""
+# andy   Hai   hai   password=""
+# andy   Deux   deux   password=""
+# xp-black   storage   xp-black   password=""
+
+

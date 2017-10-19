@@ -1,0 +1,42 @@
+#!/bin/bash
+# fstype partition|disk
+# returns file system type to stdout
+# (C) Klaus Knopper April 2004
+# License: GNU GENERAL PUBLIC LICENSE version 2.0
+
+if [ -n "$1" ]; then
+# Check if partition is already mounted
+ while read device mountpoint filesystem relax; do
+  case "$device" in *$1*) echo "$filesystem"; exit 0;; esac
+  done <<EOT
+$(cat /proc/mounts)
+EOT
+
+# Check if a device/medium is present at all
+ dd if="$1" count=1 bs=1k >/dev/null 2>&1 || exit 2
+ FILE="$(LANG=C LC_ALL=C LC_MESSAGES=C file -Lkbs "$1")"
+ [ "$?" = "0" ] || exit 3
+ if [ "$FILE" = "data" ]; then
+ # could still be ReiserFS, since "file" only reads 64k in Debian
+   FILE="$(dd if="$1" skip=16397 ibs=4 count=2 2>/dev/null)"
+ fi
+ case "$FILE" in
+  *[Rr][Ee][Ii][Ss][Ee][Rr]*)  echo "reiserfs";;
+  *ISO\ 9660*)                 echo "iso9660";;
+  *[Mm][Ii][Nn][Ii][Xx]*)      echo "minix";;
+  *[Xx][Ff][Ss]*)              echo "xfs";;
+  *[Jj][Ff][Ss]*)              echo "jfs";;
+  *[Ee][Xx][Tt]3*)             echo "ext3";;
+  *[Ee][Xx][Tt]2*)             echo "ext2";;
+  *[Ss][Ww][Aa][Pp]*)          echo "swap";;
+  *[Nn][Tt][Ff][Ss]*)          echo "ntfs";;
+  *[Ff][Aa][Tt]*)              echo "vfat";;
+  *)                           echo "auto";;
+ esac
+else
+ echo "Usage: $0 partition|disk" >&2
+ echo "   returns \"partition fstype\" lines to stdout." >&2
+ exit 1
+fi
+
+exit 0

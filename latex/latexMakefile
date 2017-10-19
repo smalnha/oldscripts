@@ -1,0 +1,85 @@
+# to keep track of all the different LaTeX-ing, each separate latex
+# command tells us where it comes from
+
+.SUFFIXES:  .aux .bbl .bib .dvi .ps .tex .toc .pdf
+
+TEXIT =/users/dwc3q/bin/tex-it
+LATEX =/users/dwc3q/bin/latex
+BIBTEX=/users/dwc3q/bin/bibtex
+# These options help pdf conversion do a better job with the fonts and
+# such
+DVIPS=/users/dwc3q/bin/dvips -Ppdf -Z -tletter
+# distill doesn't do <=> right, but makes *much smaller* PDF files
+PSTOPDF=distill
+#PSTOPDF=/usr/cs/contrib/bin/ps2pdf
+
+src= dft-spec
+
+# process the .tex file
+#main:   aux $(src).bbl $(src).toc
+#	@echo --- final processing of $(src).tex ---
+#	$(LATEX) $(src)
+dvi:    $(src).dvi
+ps:   $(src).ps
+pdf:   $(src).pdf
+
+# Split the Z bits into separate EPS files
+#zfiles:  
+#	splitz $(src).tex z-eps-files
+#	make $(src:=.aux)
+#$(src).bbl:
+#$(src).toc:
+    
+# pack for distribution
+dist:
+	tar cf FormalModel.tar $(src).tex *.bib figures/* *.sty
+	gzip -9 FormalModel.tar
+    
+# process the .dvi file
+#xdvi:   $(src).dvi
+#	xdvi -geometry +0+0 -s 4 -bg white -fg black -expert -hush $(src).dvi &
+
+# create some auxiliary files
+#aux:  
+#	make $(src:=.aux)
+#$(src).bbl:
+#$(src).toc:
+    
+# process the .dvi file
+#xdvi:   $(src).dvi
+#	xdvi -geometry +0+0 -s 4 -bg white -fg black -expert -hush $(src).dvi &
+
+#ghost:    $(src).ps
+#	ghostview -geometry +0+0 -a4 -magstep -2 $(src).ps &
+
+#+----------------------+
+#|     suffix rules     |
+#+----------------------+
+#.bib.bbl:   aux
+#	$(BIBTEX) $*
+#	@echo --- create references from $< ---
+#	$(LATEX) $*
+.dvi.ps:
+	$(DVIPS) $*
+.ps.pdf:
+	$(PSTOPDF) $<
+.tex.aux:
+	@echo --- create .aux file from $< ---
+	$(TEXIT) $(LATEX) $*
+.tex.dvi:
+	@echo --- create .dvi file from $< ---
+	$(TEXIT) $(LATEX) $*
+#.tex.toc: 
+#	@echo --- create .toc file from $< ---
+#	$(LATEX) $*
+
+#+-----------------+
+#|     cleanup     |
+#+-----------------+
+clean:  
+	rm -f core \#* *~ *.blg *.dvi *.log *.ps *.tmp *.pdf
+texclean: clean
+	rm -f *.aux *.bbl *.lof *.lot *.toc
+realclean:  texclean clean
+
+# ----- end Makefile ----- 

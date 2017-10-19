@@ -1,0 +1,6 @@
+! .keymap for non-X console (man loadkeys)
+! see .Xmodmap for X (man xmodmap)
+! see 'man 5 keymaps', and verify with 'dumpkeys' that keycode 1 is Escape and keycode 58 is Caps_Lock beforehand :)
+keycode 58 = Escape
+
+

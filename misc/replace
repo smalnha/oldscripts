@@ -1,0 +1,106 @@
+:
+##########################################################################
+# Title      :	replace - replace older with newer files
+# Author     :	Heiner Steven <heiner.steven@odn.de>
+# Date       :	1994-01-25
+# Requires   :	
+# Category   :	File Utilities
+# SCCS-Id.   :	@(#) replace	1.2 03/12/19
+##########################################################################
+# Description
+#
+##########################################################################
+
+PN=`basename "$0"`			# Program mname
+VER='1.2'
+
+usage () {
+    echo >&2 "$PN - replace older files with newer ones, $VER (stv '95)
+usage: $PN [-av] file [file ...] targetdir
+    -a: (add)     copy files not contained in targetdir
+    -v: (verbose) print diagnostics"
+    exit 1
+}
+
+msg () {
+    [ "$Verbose" = no ] && return 0
+
+    for i
+    do echo "$PN: $i" >&2
+    done
+}
+
+fatal () { Verbose=yes; msg "$@"; exit 1; }
+
+# newer (file1, file2)
+newer () {
+    [ $# -ne 2 ] && return 1
+    # If both files have the same date, the first file name
+    # given to "ls" will be returned.
+    Newest=`ls -t "$2" "$1" | head -1`
+    [ -z "$Newest" ] && return 2	# error
+    if [ "$Newest" = "$1" ]
+    then return 0
+    else return 1
+    fi
+}
+
+Verbose=no				# parameter -v
+Add=no					# copy new files (yes/no)
+while [ $# -gt 1 ]
+do
+    case "$1" in
+	-a) Add=yes ;;
+	-v) Verbose=yes ;;
+	-*) usage ;;
+	*)  break ;;
+    esac
+    shift
+done
+
+if [ $# -lt 2 ]
+then usage
+else
+    Files=
+    while [ $# -gt 1 ]
+    do
+	if [ -d "$1" ]
+	then msg "$1 is no file - ignored"
+	else Files="$Files $1"
+	fi
+	shift
+    done
+
+    [ -d "$1" ] || fatal "$1 is no directory"
+    TargetDir="$1"
+fi
+
+[ -n "$Files" ] || exit 0
+n=0
+for i in $Files
+do
+    if [ -f "$i" ]
+    then
+	Name=`basename "$i"`
+	Copy=no
+	if [ -f  "$TargetDir/$Name" ]
+	then				# File exists in target directory
+	    newer "$i" "$TargetDir/$Name" && Copy=yes
+	else
+	    if [ "$Add" = yes ]
+	    then Copy=yes
+	    else msg "$Name: not in target directory - ignored"
+	    fi
+	fi
+
+	[ "$Copy" = yes ] && {
+	    cp -p "$i" "$TargetDir/$Name" || continue
+	    msg " replacing $TargetDir/$Name"
+	    n=`expr $n + 1`
+	}
+    else
+	msg "file $i not found - ignored"
+    fi
+done
+msg "replaced $n file(s)"
+exit 0

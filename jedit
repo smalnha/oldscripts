@@ -1,0 +1,8 @@
+[ -z "$JAVA_HOME" ] && source $MY_BINSRC/initdev.src
+[ -z "$JEDIT_HOME" ] && for JEDIT_HOME in ~/development/jEdit ~/work/jEdit; do
+	[ -d $JEDIT_HOME ] && break
+done;
+
+JAVA_HEAP_SIZE=32
+echo "$JAVA_HOME/bin/java -mx${JAVA_HEAP_SIZE}m -jar $JEDIT_HOME/jedit.jar $@ &"
+$JAVA_HOME/bin/java -mx${JAVA_HEAP_SIZE}m -jar "$JEDIT_HOME/jedit.jar" $@ &

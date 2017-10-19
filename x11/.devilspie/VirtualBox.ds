@@ -1,0 +1,10 @@
+; generated_rule VirtualBox
+( if 
+( begin 
+( contains ( window_name ) "VirtualBox" )
+) 
+( begin 
+( set_workspace 4 )
+( println "moved VirtualBox to workspace 4" )
+)
+)

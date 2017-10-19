@@ -1,0 +1,8 @@
+
+font1='n019003l.pfb' # helvetica normal URW fonts
+font2='helr____.ttf' # helvetica regular truetype
+
+# If you want to use ImageMagick fonts:
+#font1=""
+#font2=""
+

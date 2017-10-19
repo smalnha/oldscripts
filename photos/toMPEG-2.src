@@ -1,0 +1,62 @@
+#from Section 4.2 at https://sourceforge.net/docman/display_doc.php?docid=3456&group_id=5776
+# convert anything that mplayer can play to input file for mpegtools, which can output DVD mpg
+
+# REQUIRES: mplayer and mpegtools
+# apt-get install mpegtools
+
+#VIDEO conversion
+convertVideo1(){
+	echo "----> need to TEST: converting to video WITH audio"
+	INPUTVIDEOFILE=${1-:file.avi}
+	BASEVIDEOFILE=`basename $1 .avi`
+	MJPEGVIDEOFILE=${BASEVIDEOFILE}_noaudio.avi
+	OUTPUTVIDEOFILE=${BASEVIDEOFILE}_noaudio.mpg
+	mkfifo stream.yuv
+	echo "mplayer -nosound -noframedrop -vo yuv4mpeg $INPUTVIDEOFILE"
+	mplayer -nosound -noframedrop -vo yuv4mpeg $INPUTVIDEOFILE
+	echo "& doesn't work for mplayer.  Hit ^Z and bg"
+}
+convertVideo2(){
+	echo "cat stream.yuv | yuv2lav -o $MJPEGVIDEOFILE"
+	cat stream.yuv | yuv2lav -o $MJPEGVIDEOFILE
+	convertVideo3
+}
+convertVideo3(){
+	NUMPROCESSORS=1
+	if [ "$HOSTNAME" == "commonlips.ece.utexas.edu" ] ; then
+		NUMPROCESSORS=8		
+	fi
+	# -M 8 for 8 processors
+	# -f 8 for dvd MPEG1 layer 2 
+	echo "lav2yuv $MJPEGVIDEOFILE | mpeg2enc -M $NUMPROCESSORS -f 8 -o $OUTPUTVIDEOFILE"
+	# -F 4 for NTSC 30 fps
+	# -a 2 for 4:3 aspect ratio
+	lav2yuv $MJPEGVIDEOFILE | mpeg2enc -M $NUMPROCESSORS -f 8 -4 2 -2 1 -G 18 -q 4 -F 4 -a 2 -o hq_$OUTPUTVIDEOFILE
+}
+
+#can play video
+playVideo(){
+# lav2yuv $MJPEGVIDEOFILE | yuvplay
+# lavplay -p S $MJPEGVIDEOFILE
+	$OUTPUTVIDEOFILE=$1
+	mplayer $OUTPUTVIDEOFILE
+}
+
+#AUDIO conversion
+convertAudio(){
+	echo "----> Untested"
+	INPUTFILE=${1:-file.avi}
+	BASEVIDEOFILE=`basename $1 .avi`
+	OUTPUTAUDIOFILE=${BASEVIDEOFILE}_audio.wav
+	mplayer -vo null -format 512 -ao pcm -aofile $OUTPUTAUDIOFILE $INPUTFILE
+	mp2enc -v 1 -b 224 -r 48000 -s -o $OUTPUTAUDIOFILE.mp2 < $OUTPUTAUDIOFILE
+	# or create a wave and cat *.wav | mp2enc -o sound.mp2
+}
+
+#merge VIDEO and AUDIO
+addAudio(){
+	AUDIOFILE=$1
+	VIDEOFILE=$2
+	OUTPUTFILE=${VIDEOFILE}.mpg
+	mplex -f 8 $AUDIOFILE $VIDEOFILE -o $OUTPUTFILE
+}

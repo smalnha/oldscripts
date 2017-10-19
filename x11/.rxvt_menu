@@ -1,0 +1,138 @@
+#!/bin/sh --
+# shell wrapper to avoid typing Menu escape sequences
+if test $# -eq 0; then
+echo "\
+usage: `basename $0` cmd
+where the most common commands are
+	[menu] [menu:name]
+	[read:file] [read:file;name]
+	[title:string]
+	+/path/menu
+	+/path/menu/*
+	+/menu/path/{-}
+	+/menu/path/{item}{rtext} action
+
+	-/*
+	-/path/menu
+	-/path/menu/*
+	-/path/{-}
+	-/path/{item}
+
+	<b>Begin<r>Right<l>Left<u>Up<d>Down<e>End
+	[done]
+
+	[rm] [rm:] [rm*] [rm:*] [rm:name]
+	[swap] [prev] [next]
+	[clear] [show] [hide]
+	[pixmap:file]
+	[dump]
+NB: commands may need to be quoted to avoid shell expansion
+"
+exit
+fi
+Echo="echo -n"
+# some systems/shells don't like `echo -n'
+case `/bin/uname` in
+    SunOS) Echo="echo";;
+esac
+while [ $# -gt 0 ]
+do
+    case $1 in
+	+* | -* | '<'* | '['*)		# send raw commands
+	$Echo "]10;$1"
+	;;
+
+	*)					# read in menu files
+	if test $1 = "default";
+	then
+	    $Echo "]10;[read:$0]"
+	else
+	    $Echo "]10;[read:$1]"
+	fi
+	if test "$COLORTERM" != "rxvt-xpm";	# remove pixmap stuff
+	then
+	    $Echo "]10;[menu][:-/Terminal/Pixmap:][show]"
+	fi
+	;;
+    esac
+    shift
+done
+read
+exit	# stop shell here!
+#-------------------------------------------------------------------------
+# since everything before a [menu] tag is ignored, we can put a default
+# menu here
+#-------------------------------------------------------------------------
+[menu:default]
+[clear]
+# [pixmap:machine1.xpm]
+
+/Programs/*
+{EDITOR}		${EDITOR:-vim}
+{jEdit}         jedit\r
+{-}
+{exit}		exit\r
+
+/Jobs/*
+{Top}		top\r
+{Ps u}		ps aux|egrep $USER
+{Ps aux}	ps aux|egrep -v "(root|ps)"
+# who's REALLY logged on (even with utmp logging turned off)
+{Who}		ps aux|egrep "\-bash"|egrep -v "grep"
+{-}
+{put in bkground}	^Z bg\r
+#{Kill}		^C\r
+
+/Files/*
+#{Dir}		ls -la|${PAGER:-more}\r
+{sort by date}      ls -ltr\r
+{sort by extension} ls -lXB\r
+{sort by size}      ls -lSr\r
+{recursive}         ls -lR\r
+{-}
+{find $1 and exec $2}     fe 
+{lowercase filenames}     lowercase\r
+{rename oldPattern newPattern fileset}  rename 
+{renDirs oldPattern newPattern} renDirs 
+{-}
+{pushd}      pushd .\r
+{popd}       popd\r
+{show stack} echo `dirs` | tr ":" '\\n'\r
+#sed 's/ /\\n/g'\r
+#echo -n ${DIRSTACK//:/\\n}\r
+{-}
+{apropos}     apropos
+{help}        help	
+
+/VIM/*
+{open}            :edit
+{explore}         :Explore\r
+{save as}         :saveas 
+{-Buffer}
+{zoom current}    :only
+{info current}    2^G
+{prev buffer}     ^^
+{open}            :buffer \t
+{-Search}
+{regexp}          :%s/
+{save as}         :saveas 
+{ignore case}     /\\c
+{whole word}      /\\<word\\>
+{count word}      :%s/\\<word\\>/&/g
+{repeated words}  /\\(\\<\\k\\+\\)\\_s\\+\\1\\>\r
+{for all buffers} :bufdo %s/foo/bar/g
+{-}
+{remove trailing spaces} :%s/\\s\\+$//
+{reduce empty lines} :v/./.,/./-1join
+
+/Net/*
+{ppp0}      /sbin/ifconfig ppp0 | awk '/inet/ { print $2 }' | awk -F ":" '{ print $2 }'
+{eth0}      /sbin/ifconfig eth0 | awk '/inet/ { print $2 }' | awk -F ":" '{ print $2 }'
+
+[read:terminal]
+[show]
+#[done:machine1]
+[done:default]
+
+
+#--------------------------------------------------------------------- eof
